@@ -15,7 +15,7 @@ const InsuranceSchemes = [
   {
     title: 'Life Insurance',
     icon: Shield,
-    description: 'Secure your family's future with term life insurance',
+    description: "Secure your family's future with term life insurance",
     coverage: '₹50 Lakhs - ₹2 Crore',
     premium: 'Starting ₹399/month'
   },
