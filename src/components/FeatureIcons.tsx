@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Card, CardContent } from './ui/card';
-import { Shield, CreditCard, PiggyBank, Loan } from 'lucide-react';
+import { Shield, CreditCard, PiggyBank, Briefcase } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const FeatureIcons: React.FC = () => {
@@ -16,7 +16,7 @@ const FeatureIcons: React.FC = () => {
     },
     {
       title: 'Loans',
-      icon: Loan,
+      icon: Briefcase,  // Replaced 'Loan' with 'Briefcase'
       color: 'bg-light-blue/10 text-light-blue',
       route: '/loans'
     },

@@ -2,7 +2,7 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Briefcase, BriefcaseMedical, Loan } from 'lucide-react';
+import { ArrowRight, Briefcase, BriefcaseMedical, CreditCard } from 'lucide-react';
 
 const LoanSchemes = [
   {
@@ -21,7 +21,7 @@ const LoanSchemes = [
   },
   {
     title: 'Gold Loan',
-    icon: Loan,
+    icon: CreditCard,  // Replaced 'Loan' with 'CreditCard'
     description: 'Get loans against your gold jewelry',
     interest: '8.99% p.a',
     timeline: '3-24 months'
