@@ -15,7 +15,7 @@ const sampleData = {
   gainAmount: 1045.67,
   investments: {
     gold: {
-      type: 'gold',
+      type: 'gold' as const,  // Fixed type definition
       amount: 32450.75,
       weight: 5.5,
       weightUnit: 'grams',
@@ -23,7 +23,7 @@ const sampleData = {
       priceChange: 1.23,
     },
     silver: {
-      type: 'silver',
+      type: 'silver' as const,  // Fixed type definition
       amount: 13421.60,
       weight: 250,
       weightUnit: 'grams',
