@@ -1,29 +1,36 @@
 
 import React from 'react';
 import { Card, CardContent } from './ui/card';
-import { Shield, CreditCard, PiggyBank } from 'lucide-react';
+import { Shield, CreditCard, PiggyBank, Loan } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const FeatureIcons: React.FC = () => {
+  const navigate = useNavigate();
+
   const features = [
     {
       title: 'Insurance',
       icon: Shield,
       color: 'bg-dark-blue/10 text-dark-blue',
+      route: '/insurance'
     },
     {
       title: 'Loans',
-      icon: ArrowTrendingUp,
+      icon: Loan,
       color: 'bg-light-blue/10 text-light-blue',
+      route: '/loans'
     },
     {
       title: 'Savings',
       icon: PiggyBank,
       color: 'bg-vibrant-red/10 text-vibrant-red',
+      route: '/savings'
     },
     {
       title: 'Credit',
       icon: CreditCard,
       color: 'bg-dark-blue/10 text-dark-blue',
+      route: '/credit'
     },
   ];
 
@@ -32,7 +39,10 @@ const FeatureIcons: React.FC = () => {
       {features.map((feature, index) => (
         <Card key={index} className="border-none shadow-sm overflow-hidden group">
           <CardContent className="p-0">
-            <button className="w-full h-full flex flex-col items-center justify-center py-4 px-2 transition-all hover:bg-gray-50">
+            <button 
+              onClick={() => navigate(feature.route)}
+              className="w-full h-full flex flex-col items-center justify-center py-4 px-2 transition-all hover:bg-gray-50"
+            >
               <div className={`rounded-full p-3 ${feature.color} mb-2 transition-transform group-hover:scale-110`}>
                 <feature.icon size={18} />
               </div>
@@ -44,24 +54,5 @@ const FeatureIcons: React.FC = () => {
     </div>
   );
 };
-
-// Custom icon for Loans since it's not in the Lucide set
-const ArrowTrendingUp = (props) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    <path d="M17 7L7 17"/>
-    <path d="M17 17V7H7"/>
-  </svg>
-);
 
 export default FeatureIcons;
