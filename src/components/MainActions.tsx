@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from './ui/button';
-import { Sell, Coins } from 'lucide-react';
+import { Coins, DollarSign } from 'lucide-react';
 
 const MainActions: React.FC = () => {
   return (
@@ -11,7 +11,7 @@ const MainActions: React.FC = () => {
         Buy
       </Button>
       <Button variant="outline" className="flex-1 h-14 border-dark-blue text-dark-blue hover:bg-dark-blue/5 rounded-lg">
-        <Sell className="mr-2" size={18} />
+        <DollarSign className="mr-2" size={18} />
         Sell
       </Button>
     </div>
