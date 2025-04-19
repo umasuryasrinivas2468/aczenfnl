@@ -10,6 +10,8 @@ import ProfileSettings from "./pages/ProfileSettings";
 import SplashScreen from "./components/SplashScreen";
 import Loans from "./pages/Loans";
 import Insurance from "./pages/Insurance";
+import Savings from "./pages/Savings";
+import Credit from "./pages/Credit";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +38,8 @@ const App = () => {
             <Route path="/profile" element={<ProfileSettings />} />
             <Route path="/loans" element={<Loans />} />
             <Route path="/insurance" element={<Insurance />} />
+            <Route path="/savings" element={<Savings />} />
+            <Route path="/credit" element={<Credit />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
