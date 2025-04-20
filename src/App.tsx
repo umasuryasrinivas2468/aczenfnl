@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useState, useEffect } from "react";
 import Index from "./pages/Index";
+import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import ProfileSettings from "./pages/ProfileSettings";
 import SplashScreen from "./components/SplashScreen";
@@ -35,6 +36,7 @@ const App = () => {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/login" element={<Login />} />
             <Route path="/profile" element={<ProfileSettings />} />
             <Route path="/loans" element={<Loans />} />
             <Route path="/insurance" element={<Insurance />} />
