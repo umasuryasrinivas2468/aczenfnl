@@ -13,17 +13,17 @@ const isSupabaseConfigured = typeof supabaseUrl === 'string' &&
 
 // Create a mock client that generates predictable errors for better UX
 const createMockClient = () => {
-  const mockError = new Error('Supabase not configured');
-  
   return {
     auth: {
-      signInWithPassword: () => Promise.reject({
+      signInWithPassword: () => Promise.resolve({
+        data: null,
         error: {
           message: 'Authentication failed: Supabase connection not configured',
           status: 500
         }
       }),
-      signUp: () => Promise.reject({
+      signUp: () => Promise.resolve({
+        data: null,
         error: {
           message: 'Registration failed: Supabase connection not configured',
           status: 500
@@ -34,11 +34,11 @@ const createMockClient = () => {
       getSession: () => Promise.resolve({ data: { session: null }, error: null })
     },
     // Add other mock methods as needed
-    from: () => ({
-      select: () => ({ error: mockError, data: null }),
-      insert: () => ({ error: mockError, data: null }),
-      update: () => ({ error: mockError, data: null }),
-      delete: () => ({ error: mockError, data: null }),
+    from: (table: string) => ({
+      select: () => Promise.resolve({ error: null, data: [] }),
+      insert: () => Promise.resolve({ error: null, data: [] }),
+      update: () => Promise.resolve({ error: null, data: [] }),
+      delete: () => Promise.resolve({ error: null, data: [] }),
     })
   };
 };

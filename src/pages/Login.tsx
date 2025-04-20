@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 
 const formSchema = z.object({
@@ -29,6 +29,9 @@ const Login = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Demo mode - if using the mock client, allow any login with valid format
+  const isDemoMode = !import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY;
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -40,6 +43,21 @@ const Login = () => {
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsLoading(true);
     try {
+      // In demo mode, simulate successful login with any valid credentials
+      if (isDemoMode) {
+        // Short delay to simulate network request
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        toast({
+          title: "Demo Login Successful",
+          description: "This is a demo login. Connect Supabase for real authentication.",
+        });
+        
+        navigate('/');
+        return;
+      }
+      
+      // Real Supabase authentication
       const { data, error } = await supabase.auth.signInWithPassword({
         email: values.email,
         password: values.password,
@@ -94,17 +112,18 @@ const Login = () => {
           <p className="text-muted-foreground mt-2">Sign in to your account</p>
         </div>
         
-        {/* Supabase Connection Warning */}
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-4 text-amber-800 text-sm flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-medium">Demo Mode Active</p>
-            <p className="mt-1">
-              This login form is currently in demo mode because Supabase is not connected. 
-              Connect Supabase through the Lovable interface to enable real authentication.
-            </p>
+        {isDemoMode && (
+          <div className="bg-amber-50 border border-amber-200 rounded-md p-4 text-amber-800 text-sm flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Demo Mode Active</p>
+              <p className="mt-1">
+                This login form is in demo mode. Any valid email and password (min 6 characters) will work.
+                Connect Supabase through the Lovable interface for real authentication.
+              </p>
+            </div>
           </div>
-        </div>
+        )}
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -157,11 +176,13 @@ const Login = () => {
           </form>
         </Form>
 
-        <div className="text-center text-sm text-muted-foreground">
-          <p>Demo credentials:</p>
-          <p>Email: demo@example.com</p>
-          <p>Password: password123</p>
-        </div>
+        {isDemoMode && (
+          <div className="text-center text-sm text-muted-foreground">
+            <p>Example login:</p>
+            <p>Email: demo@example.com</p>
+            <p>Password: password123</p>
+          </div>
+        )}
       </div>
     </div>
   );
