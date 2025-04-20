@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -16,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 
 const formSchema = z.object({
   email: z.string().email("Please enter a valid email"),
@@ -25,6 +25,7 @@ const formSchema = z.object({
 
 const Login = () => {
   const [showPassword, setShowPassword] = React.useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -37,13 +38,36 @@ const Login = () => {
   });
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    setIsLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: values.email,
         password: values.password,
       });
 
-      if (error) throw error;
+      if (error) {
+        // Handle specific error messages
+        if (error.message.includes('not configured')) {
+          toast({
+            variant: "destructive",
+            title: "Supabase Not Connected",
+            description: "Please connect your Supabase project in the Lovable interface to enable authentication.",
+          });
+        } else if (error.message.includes('Invalid login credentials')) {
+          toast({
+            variant: "destructive",
+            title: "Invalid Credentials",
+            description: "The email or password you entered is incorrect.",
+          });
+        } else {
+          toast({
+            variant: "destructive",
+            title: "Login Failed",
+            description: error.message || "An error occurred during login",
+          });
+        }
+        return;
+      }
 
       toast({
         title: "Success",
@@ -51,12 +75,14 @@ const Login = () => {
       });
 
       navigate('/');
-    } catch (error) {
+    } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Invalid login credentials",
+        description: error?.message || "An unexpected error occurred",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -66,6 +92,18 @@ const Login = () => {
         <div className="text-center">
           <h2 className="text-2xl font-bold">Welcome back</h2>
           <p className="text-muted-foreground mt-2">Sign in to your account</p>
+        </div>
+        
+        {/* Supabase Connection Warning */}
+        <div className="bg-amber-50 border border-amber-200 rounded-md p-4 text-amber-800 text-sm flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Demo Mode Active</p>
+            <p className="mt-1">
+              This login form is currently in demo mode because Supabase is not connected. 
+              Connect Supabase through the Lovable interface to enable real authentication.
+            </p>
+          </div>
         </div>
         
         <Form {...form}>
@@ -113,11 +151,17 @@ const Login = () => {
               )}
             />
             
-            <Button type="submit" className="w-full">
-              Sign in
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? "Signing in..." : "Sign in"}
             </Button>
           </form>
         </Form>
+
+        <div className="text-center text-sm text-muted-foreground">
+          <p>Demo credentials:</p>
+          <p>Email: demo@example.com</p>
+          <p>Password: password123</p>
+        </div>
       </div>
     </div>
   );
