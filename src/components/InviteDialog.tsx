@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { Mail, MessageSquare, Send, WhatsApp } from "lucide-react";
+import { Mail, MessageSquare, Facebook } from "lucide-react";
 
 const InviteDialog = ({ trigger }: { trigger: React.ReactNode }) => {
   const { toast } = useToast();
@@ -36,7 +36,7 @@ const InviteDialog = ({ trigger }: { trigger: React.ReactNode }) => {
             className="flex gap-2 h-12"
             onClick={() => handleShare('WhatsApp')}
           >
-            <WhatsApp className="text-green-500" />
+            <Facebook className="text-green-500" />
             Share via WhatsApp
           </Button>
           <Button 
