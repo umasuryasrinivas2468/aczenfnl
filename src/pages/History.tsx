@@ -12,13 +12,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-// Sample transaction history data - this would typically come from an API
-const sampleTransactions = [
-  { id: 1, date: '2025-04-19', type: 'Buy', amount: 3000, weight: 0.51, status: 'Completed' },
-  { id: 2, date: '2025-04-15', type: 'Buy', amount: 2500, weight: 0.42, status: 'Completed' },
-  { id: 3, date: '2025-04-10', type: 'Buy', amount: 4000, weight: 0.68, status: 'Completed' },
-  { id: 4, date: '2025-04-05', type: 'Buy', amount: 1500, weight: 0.25, status: 'Completed' },
-];
+// Empty transaction history initially
+const userTransactions = [];
 
 const History = () => {
   const navigate = useNavigate();
@@ -38,7 +33,7 @@ const History = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-          {sampleTransactions.length > 0 ? (
+          {userTransactions.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -50,7 +45,7 @@ const History = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sampleTransactions.map((transaction) => (
+                {userTransactions.map((transaction: any) => (
                   <TableRow key={transaction.id}>
                     <TableCell>{transaction.date}</TableCell>
                     <TableCell>{transaction.type}</TableCell>
