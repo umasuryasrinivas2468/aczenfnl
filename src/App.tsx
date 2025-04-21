@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -13,6 +14,7 @@ import Loans from "./pages/Loans";
 import Insurance from "./pages/Insurance";
 import Savings from "./pages/Savings";
 import Credit from "./pages/Credit";
+import History from "./pages/History";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +44,7 @@ const App = () => {
             <Route path="/insurance" element={<Insurance />} />
             <Route path="/savings" element={<Savings />} />
             <Route path="/credit" element={<Credit />} />
+            <Route path="/history" element={<History />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

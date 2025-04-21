@@ -1,8 +1,9 @@
 
-import React from 'react'
+import React, { useState } from 'react'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -10,12 +11,13 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import { Coins } from "lucide-react"
 
 const BuyDialog = () => {
   const { toast } = useToast()
-  const [amount, setAmount] = React.useState("")
+  const [amount, setAmount] = useState("")
+  const [isOpen, setIsOpen] = useState(false)
 
   const handleBuy = (e: React.FormEvent) => {
     e.preventDefault()
@@ -27,14 +29,29 @@ const BuyDialog = () => {
       })
       return
     }
-    toast({
-      title: "Success",
-      description: `Buy order placed for ₹${amount}`,
-    })
+
+    const amountValue = parseFloat(amount)
+    if (amountValue > 5000) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Amount cannot exceed ₹5000",
+      })
+      return
+    }
+
+    // Construct Cashfree URL with amount
+    const cashfreeUrl = `https://payments.cashfree.com/forms?code=aczen&amount=${amount}`
+    
+    // Redirect to Cashfree
+    window.location.href = cashfreeUrl
+    
+    // Close dialog
+    setIsOpen(false)
   }
 
   return (
-    <Dialog>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button className="flex-1 h-14 bg-dark-blue hover:bg-dark-blue/90 text-white rounded-lg">
           <Coins className="mr-2" size={18} />
@@ -44,6 +61,7 @@ const BuyDialog = () => {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Buy Gold</DialogTitle>
+          <DialogDescription>Enter an amount below ₹5000</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleBuy} className="space-y-4">
           <div>
@@ -54,10 +72,11 @@ const BuyDialog = () => {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="Enter amount"
+              max="5000"
             />
           </div>
           <Button type="submit" className="w-full">
-            Confirm Buy
+            Proceed to Payment
           </Button>
         </form>
       </DialogContent>

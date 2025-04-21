@@ -25,7 +25,7 @@ const InvestmentSummary: React.FC<InvestmentSummaryProps> = ({
             <h2 className="text-3xl font-bold text-dark-blue">₹{totalAmount.toLocaleString()}</h2>
             <div className={`flex items-center ml-2 ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
               <ArrowUp size={16} className={`${!isPositive && 'rotate-180'}`} />
-              <span className="text-sm font-medium">{gainPercentage.toFixed(2)}%</span>
+              <span className="text-sm font-medium">{Math.abs(gainPercentage).toFixed(2)}%</span>
             </div>
           </div>
           <p className={`text-sm ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
