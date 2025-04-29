@@ -1,5 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import InvestmentSummary from '../components/InvestmentSummary';
 import InvestmentTabs from '../components/InvestmentTabs';
@@ -8,29 +8,72 @@ import FeatureIcons from '../components/FeatureIcons';
 import InviteEarn from '../components/InviteEarn';
 import Illustration from '../components/Illustration';
 import { usePreciousMetalPrices } from '../hooks/usePreciousMetalPrices';
+import { User, Tag, Trophy, Package } from 'lucide-react';
 
-// Real user investment data
-const userInvestments = {
-  totalInvestment: 11000, // Total amount the user has invested
+// Define types for investments
+type MetalType = 'gold' | 'silver';
+
+interface Investment {
+  type: MetalType;
+  amount: number;      // Amount in INR
+  weight: number;      // Weight in grams
+  weightUnit: string;
+}
+
+interface UserInvestments {
+  totalInvestment: number;
   investments: {
-    gold: {
-      type: 'gold' as const,
-      amount: 8000,      // Amount in INR
-      weight: 1.35,      // Weight in grams
-      weightUnit: 'grams',
-    },
-    silver: {
-      type: 'silver' as const,
-      amount: 3000,      // Amount in INR
-      weight: 35,        // Weight in grams
-      weightUnit: 'grams',
-    }
-  },
-};
+    gold: Investment;
+    silver: Investment;
+  };
+}
 
 const Index: React.FC = () => {
+  const navigate = useNavigate();
   const [pageLoaded, setPageLoaded] = useState(false);
   const { gold: goldPrice, silver: silverPrice, isLoading } = usePreciousMetalPrices();
+  
+  // Dynamic user investment data based on live prices
+  const [userInvestments, setUserInvestments] = useState<UserInvestments>({
+    totalInvestment: 0,
+    investments: {
+      gold: {
+        type: 'gold',
+        amount: 0,
+        weight: 0,      // Starting with 0 weight (no investment)
+        weightUnit: 'grams',
+      },
+      silver: {
+        type: 'silver',
+        amount: 0,
+        weight: 0,      // Starting with 0 weight (no investment)
+        weightUnit: 'grams',
+      }
+    },
+  });
+  
+  // Update investment amounts when prices change
+  useEffect(() => {
+    if (!isLoading) {
+      const goldAmount = userInvestments.investments.gold.weight * goldPrice;
+      const silverAmount = userInvestments.investments.silver.weight * silverPrice;
+      const totalInvestment = goldAmount + silverAmount;
+      
+      setUserInvestments({
+        totalInvestment,
+        investments: {
+          gold: {
+            ...userInvestments.investments.gold,
+            amount: goldAmount
+          },
+          silver: {
+            ...userInvestments.investments.silver,
+            amount: silverAmount
+          }
+        }
+      });
+    }
+  }, [goldPrice, silverPrice, isLoading]);
   
   // Calculate current value and gains based on live prices
   const calculateCurrentValue = () => {
@@ -39,6 +82,12 @@ const Index: React.FC = () => {
     const goldValue = userInvestments.investments.gold.weight * goldPrice;
     const silverValue = userInvestments.investments.silver.weight * silverPrice;
     const currentValue = goldValue + silverValue;
+    
+    // If no investments yet, return zeros
+    if (currentValue === 0 || userInvestments.totalInvestment === 0) {
+      return { currentValue: 0, gainAmount: 0, gainPercentage: 0 };
+    }
+    
     const gainAmount = currentValue - userInvestments.totalInvestment;
     const gainPercentage = (gainAmount / userInvestments.totalInvestment) * 100;
     
@@ -106,7 +155,7 @@ const Index: React.FC = () => {
   };
 
   return (
-    <div className={`max-w-md mx-auto min-h-screen bg-off-white ${pageLoaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}>
+    <div className={`max-w-md mx-auto min-h-screen bg-black text-white ${pageLoaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300 pb-16`}>
       <div className="p-4">
         <Header />
         
