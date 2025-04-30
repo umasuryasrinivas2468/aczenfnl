@@ -8,6 +8,7 @@ import FeatureIcons from '../components/FeatureIcons';
 import InviteEarn from '../components/InviteEarn';
 import Illustration from '../components/Illustration';
 import { usePreciousMetalPrices } from '../hooks/usePreciousMetalPrices';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { User, Tag, Trophy, Package } from 'lucide-react';
 
 // Define types for investments
@@ -20,58 +21,71 @@ interface Investment {
   weightUnit: string;
 }
 
+interface Transaction {
+  id: string;
+  type: MetalType;
+  amount: number;
+  date: string;
+  status: string;
+  transactionId?: string;
+}
+
 interface UserInvestments {
   totalInvestment: number;
   investments: {
     gold: Investment;
     silver: Investment;
   };
+  transactions: Transaction[];
 }
+
+const defaultInvestments: UserInvestments = {
+  totalInvestment: 0,
+  investments: {
+    gold: {
+      type: 'gold',
+      amount: 0,
+      weight: 0,
+      weightUnit: 'grams',
+    },
+    silver: {
+      type: 'silver',
+      amount: 0,
+      weight: 0,
+      weightUnit: 'grams',
+    }
+  },
+  transactions: []
+};
 
 const Index: React.FC = () => {
   const navigate = useNavigate();
   const [pageLoaded, setPageLoaded] = useState(false);
   const { gold: goldPrice, silver: silverPrice, isLoading } = usePreciousMetalPrices();
   
-  // Dynamic user investment data based on live prices
-  const [userInvestments, setUserInvestments] = useState<UserInvestments>({
-    totalInvestment: 0,
-    investments: {
-      gold: {
-        type: 'gold',
-        amount: 0,
-        weight: 0,      // Starting with 0 weight (no investment)
-        weightUnit: 'grams',
-      },
-      silver: {
-        type: 'silver',
-        amount: 0,
-        weight: 0,      // Starting with 0 weight (no investment)
-        weightUnit: 'grams',
-      }
-    },
-  });
+  // Get user investments from localStorage
+  const [userInvestments, setUserInvestments] = useLocalStorage<UserInvestments>('userInvestments', defaultInvestments);
   
   // Update investment amounts when prices change
   useEffect(() => {
     if (!isLoading) {
       const goldAmount = userInvestments.investments.gold.weight * goldPrice;
       const silverAmount = userInvestments.investments.silver.weight * silverPrice;
-      const totalInvestment = goldAmount + silverAmount;
       
-      setUserInvestments({
-        totalInvestment,
+      // Only update the current value, not the totalInvestment
+      setUserInvestments(prev => ({
+        ...prev,
         investments: {
           gold: {
-            ...userInvestments.investments.gold,
+            ...prev.investments.gold,
             amount: goldAmount
           },
           silver: {
-            ...userInvestments.investments.silver,
+            ...prev.investments.silver,
             amount: silverAmount
           }
         }
-      });
+      }));
     }
   }, [goldPrice, silverPrice, isLoading]);
   
