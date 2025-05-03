@@ -15,6 +15,15 @@ import { Coins } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useLocalStorage } from "@/hooks/useLocalStorage"
 
+// API URL - adjust if needed for different environments
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+declare global {
+  interface Window {
+    Cashfree: any;
+  }
+}
+
 const BuyDialog = () => {
   const { toast } = useToast()
   const [amount, setAmount] = useState("")
@@ -66,12 +75,10 @@ const BuyDialog = () => {
     setIsLoading(true)
 
     try {
-      // Cashfree payment integration with TEST credentials
+      // Generate order ID
       const orderId = `order_${Date.now()}`
-      const appId = "TEST10401621b07dc6fbcf2ab23955c912610401"
-      const secretKey = "cfsk_ma_test_e5544b1e437f252b39ad6b0144784582_c0cccdef"
       
-      // Store transaction details in localStorage to retrieve after payment
+      // Store pending transaction in local storage
       const transactionData = {
         id: orderId,
         type: metal,
@@ -82,57 +89,25 @@ const BuyDialog = () => {
       
       localStorage.setItem('pendingTransaction', JSON.stringify(transactionData))
       
-      // Direct Cashfree payment link for test mode
-      // Using the test payment URL for Cashfree
-      const cashfreeTestUrl = `https://test.cashfree.com/billpay/checkout/post/submit`
+      // DIRECT APPROACH - Use URL parameters directly
+      // Format: https://payments.cashfree.com/order/#/{appId}/{orderId}/{amount}
+      const appId = "850529145692c9f93773ed2c0a925058"
+      const checkoutUrl = `https://payments.cashfree.com/order/#/${appId}/${orderId}/${amountValue}`
       
-      // Create form for the test environment
-      const form = document.createElement('form')
-      form.method = 'POST'
-      form.action = cashfreeTestUrl
-      
-      // Required parameters for Cashfree test mode
-      const params = {
-        appId: appId,
-        orderId: orderId,
-        orderAmount: amountValue.toString(),
-        orderCurrency: 'INR',
-        orderNote: `Purchase of ${metal}`,
-        customerName: 'Test User',
-        customerEmail: 'test@example.com',
-        customerPhone: '9999999999',
-        returnUrl: `${window.location.origin}/payment-success`,
-        notifyUrl: `${window.location.origin}/payment-success`,
-      }
-      
-      // Create and append signature for Cashfree
-      const sortedParams = Object.keys(params).sort().reduce((acc, key) => {
-        acc[key] = params[key];
-        return acc;
-      }, {});
-      
-      // Add all parameters to the form
-      for (const key in params) {
-        const input = document.createElement('input')
-        input.type = 'hidden'
-        input.name = key
-        input.value = params[key]
-        form.appendChild(input)
-      }
-      
-      // Append form to body and submit
-      document.body.appendChild(form)
-      form.submit()
-      
-      // Close dialog
+      // Close dialog before redirect
       setIsOpen(false)
-    } catch (error) {
+      setIsLoading(false)
+      
+      // Redirect to Cashfree checkout
+      window.location.href = checkoutUrl
+      
+    } catch (error: any) {
+      console.error('Payment error:', error)
       toast({
         variant: "destructive",
         title: "Payment Error",
-        description: "Failed to initiate payment. Please try again.",
+        description: error.message || "Failed to initiate payment. Please try again.",
       })
-    } finally {
       setIsLoading(false)
     }
   }
@@ -140,7 +115,10 @@ const BuyDialog = () => {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button className="flex-1 h-14 bg-dark-blue hover:bg-dark-blue/90 text-white rounded-lg">
+        <Button 
+          className="flex-1 h-14 bg-dark-blue hover:bg-dark-blue/90 text-white rounded-lg"
+          onClick={() => setIsOpen(true)}
+        >
           <Coins className="mr-2" size={18} />
           Buy
         </Button>
@@ -180,7 +158,11 @@ const BuyDialog = () => {
               max="5000"
             />
           </div>
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          <Button 
+            type="submit" 
+            className="w-full" 
+            disabled={isLoading}
+          >
             {isLoading ? "Processing..." : "Proceed to Payment"}
           </Button>
         </form>

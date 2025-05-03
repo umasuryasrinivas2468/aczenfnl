@@ -14,8 +14,10 @@ import Credit from "./pages/Credit";
 import History from "./pages/History";
 import Hotels from "./pages/Hotels";
 import Rewards from "./pages/Rewards";
+import RewardsNew from "./pages/RewardsNew";
 import Settings from "./pages/Settings";
 import PaymentSuccess from "./pages/PaymentSuccess";
+import PaymentPage from "./pages/PaymentPage";
 
 const queryClient = new QueryClient();
 
@@ -68,8 +70,11 @@ const App = () => {
               <Route path="/metro" element={<ProtectedRoute><NotFound /></ProtectedRoute>} />
               <Route path="/orders" element={<ProtectedRoute><NotFound /></ProtectedRoute>} />
               <Route path="/rewards" element={<ProtectedRoute><Rewards /></ProtectedRoute>} />
+              <Route path="/rewards-new" element={<ProtectedRoute><RewardsNew /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/payment" element={<ProtectedRoute><PaymentPage /></ProtectedRoute>} />
               <Route path="/payment-success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
+              <Route path="/payment-status" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
