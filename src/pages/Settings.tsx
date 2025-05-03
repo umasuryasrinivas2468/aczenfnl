@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
   User, 
-  Bell, 
   Shield, 
   HelpCircle, 
   FileText, 
@@ -11,19 +10,21 @@ import {
   Mail, 
   ChevronRight,
   Smartphone,
-  MessageSquare,
   LogOut
 } from 'lucide-react';
+import { useUser, useClerk } from '@clerk/clerk-react';
+import { Button } from '@/components/ui/button';
 
 const Settings: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useUser();
+  const { signOut } = useClerk();
 
   const settingsSections = [
     {
       title: 'Account',
       items: [
         { name: 'Profile Information', icon: User, route: '/profile' },
-        { name: 'Notifications', icon: Bell, route: '/notifications' },
         { name: 'Privacy & Security', icon: Shield, route: '/privacy' }
       ]
     },
@@ -31,8 +32,7 @@ const Settings: React.FC = () => {
       title: 'Support',
       items: [
         { name: 'Help Center', icon: HelpCircle, route: '/help' },
-        { name: 'Contact Us', icon: Phone, route: '/contact' },
-        { name: 'Report an Issue', icon: MessageSquare, route: '/report' }
+        { name: 'Contact Us', icon: Phone, route: '/contact' }
       ]
     },
     {
@@ -61,19 +61,26 @@ const Settings: React.FC = () => {
       {/* Profile Preview */}
       <div className="p-6 flex items-center border-b border-gray-800">
         <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-700">
-          <img src="/images/profile.jpg" alt="Profile" className="w-full h-full object-cover" />
+          {user?.imageUrl ? (
+            <img src={user.imageUrl} alt="Profile" className="w-full h-full object-cover" />
+          ) : (
+            <User className="w-full h-full p-3" />
+          )}
         </div>
         <div className="ml-4">
-          <h2 className="text-lg font-semibold">User Name</h2>
-          <p className="text-sm text-gray-400">user@example.com</p>
+          <h2 className="text-lg font-semibold">{user?.fullName || 'User'}</h2>
+          <p className="text-sm text-gray-400">{user?.primaryEmailAddress?.emailAddress || 'user@example.com'}</p>
         </div>
-        <button className="ml-auto p-2 rounded-full bg-gray-800 hover:bg-gray-700">
+        <button 
+          className="ml-auto p-2 rounded-full bg-gray-800 hover:bg-gray-700"
+          onClick={() => navigate('/profile')}
+        >
           <ChevronRight className="w-5 h-5" />
         </button>
       </div>
 
       {/* Settings Sections */}
-      <div className="p-4">
+      <div className="p-4 space-y-6">
         {settingsSections.map((section, sectionIndex) => (
           <div key={sectionIndex} className="mb-6">
             <h3 className="text-sm font-semibold text-gray-400 mb-2">{section.title}</h3>
@@ -97,7 +104,7 @@ const Settings: React.FC = () => {
       </div>
 
       {/* App Info */}
-      <div className="p-4 border-t border-gray-800">
+      <div className="px-4 py-2 border-t border-gray-800">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-semibold">App Version</h3>
@@ -109,21 +116,17 @@ const Settings: React.FC = () => {
 
       {/* Logout Button */}
       <div className="p-4">
-        <button 
+        <Button 
           className="w-full py-3 flex items-center justify-center bg-red-900 hover:bg-red-800 rounded-lg"
           onClick={() => {
-            // Use Clerk's signOut method
-            import('@clerk/clerk-react').then(({ useAuth }) => {
-              const { signOut } = useAuth();
-              signOut().then(() => {
-                navigate('/sign-in');
-              });
+            signOut().then(() => {
+              navigate('/sign-in');
             });
           }}
         >
           <LogOut className="w-5 h-5 mr-2" />
           <span className="font-medium">Log Out</span>
-        </button>
+        </Button>
       </div>
     </div>
   );
