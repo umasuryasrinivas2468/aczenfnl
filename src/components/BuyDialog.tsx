@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -11,18 +11,23 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { Coins } from "lucide-react"
+import { Coins, CreditCard, QrCode } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useLocalStorage } from "@/hooks/useLocalStorage"
+import { PaymentService } from '@/lib/services/payment'
 
-// API URL - adjust if needed for different environments
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// API URL - hardcode to use port 5004 always
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5004';
 
-declare global {
-  interface Window {
-    Cashfree: any;
-  }
+// Customer info interface
+interface CustomerInfo {
+  name: string;
+  email: string;
+  phone: string;
 }
+
+// Payment method options
+type PaymentMethod = 'card' | 'upi';
 
 const BuyDialog = () => {
   const { toast } = useToast()
@@ -30,6 +35,14 @@ const BuyDialog = () => {
   const [metal, setMetal] = useState("gold")
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [showCustomerInfo, setShowCustomerInfo] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card')
+  
+  const [customerInfo, setCustomerInfo] = useLocalStorage<CustomerInfo>('customerInfo', {
+    name: '',
+    email: '',
+    phone: ''
+  })
   
   // Get and update user investments from local storage
   const [userInvestments, setUserInvestments] = useLocalStorage('userInvestments', {
@@ -50,6 +63,17 @@ const BuyDialog = () => {
     },
     transactions: []
   })
+  
+  // Check if customer info is complete on first render
+  useEffect(() => {
+    // Check if customer info is complete
+    const isInfoComplete = 
+      customerInfo.name && 
+      customerInfo.email && 
+      customerInfo.phone;
+    
+    setShowCustomerInfo(!isInfoComplete);
+  }, [customerInfo]);
 
   const handleBuy = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -71,46 +95,135 @@ const BuyDialog = () => {
       })
       return
     }
+    
+    // Validate customer info if being shown
+    if (showCustomerInfo) {
+      if (!customerInfo.name || !customerInfo.email || !customerInfo.phone) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Please fill in all customer information",
+        })
+        return
+      }
+      
+      // Basic email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(customerInfo.email)) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Please enter a valid email address",
+        })
+        return
+      }
+      
+      // Basic phone validation (10 digits)
+      const phoneRegex = /^\d{10}$/
+      if (!phoneRegex.test(customerInfo.phone)) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Please enter a valid 10-digit phone number",
+        })
+        return
+      }
+    }
 
     setIsLoading(true)
 
     try {
-      // Generate order ID
-      const orderId = `order_${Date.now()}`
+      console.log("Initiating payment process with server:", API_URL);
       
-      // Store pending transaction in local storage
-      const transactionData = {
-        id: orderId,
-        type: metal,
-        amount: amountValue,
-        date: new Date().toISOString(),
-        status: 'pending'
+      // Direct API calls to ensure consistent behavior
+      // Step 1: Create order
+      const createOrderResponse = await fetch(`${API_URL}/api/create-cashfree-order`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orderAmount: amountValue,
+          orderId: `order_${Date.now()}`,
+          customerDetails: {
+            customerId: `customer_${Date.now()}`,
+        customerName: customerInfo.name,
+        customerEmail: customerInfo.email,
+            customerPhone: customerInfo.phone
+          }
+        })
+      });
+      
+      if (!createOrderResponse.ok) {
+        const errorData = await createOrderResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server error: ${createOrderResponse.status}`);
       }
       
-      localStorage.setItem('pendingTransaction', JSON.stringify(transactionData))
+      const orderData = await createOrderResponse.json();
+      console.log('Order created:', orderData);
       
-      // DIRECT APPROACH - Use URL parameters directly
-      // Format: https://payments.cashfree.com/order/#/{appId}/{orderId}/{amount}
-      const appId = "850529145692c9f93773ed2c0a925058"
-      const checkoutUrl = `https://payments.cashfree.com/order/#/${appId}/${orderId}/${amountValue}`
+      // Step 2: Get payment link directly
+      const paymentLinkResponse = await fetch(`${API_URL}/api/create-payment-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orderId: orderData.order_id
+        })
+      });
       
-      // Close dialog before redirect
-      setIsOpen(false)
-      setIsLoading(false)
+      if (!paymentLinkResponse.ok) {
+        const errorData = await paymentLinkResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || `Payment link error: ${paymentLinkResponse.status}`);
+      }
       
-      // Redirect to Cashfree checkout
-      window.location.href = checkoutUrl
+      const paymentData = await paymentLinkResponse.json();
+      console.log('Payment link generated:', paymentData);
       
+      // Step 3: Redirect to the payment page
+      if (paymentData.payment_link) {
+        toast({
+          title: "Payment Initiated",
+          description: `Redirecting to payment gateway...`,
+        });
+        
+        // Close dialog and redirect
+        setIsOpen(false);
+        window.location.href = paymentData.payment_link;
+      } else {
+        throw new Error('No payment link received from server');
+      }
     } catch (error: any) {
-      console.error('Payment error:', error)
+      console.error('Payment error:', error);
+      
+      // More specific error message based on error type
+      let errorMessage = "Failed to initiate payment. Please try again.";
+      
+      if (error.message?.includes('fetch') || error.message?.includes('Network')) {
+        errorMessage = `Network error: Unable to connect to payment server at ${API_URL}. Please make sure the server is running.`;
+      } else if (error.message?.includes('return_url')) {
+        errorMessage = "Configuration error: The return URL must use HTTPS for Cashfree integration.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         variant: "destructive",
         title: "Payment Error",
-        description: error.message || "Failed to initiate payment. Please try again.",
-      })
-      setIsLoading(false)
+        description: errorMessage,
+      });
+    } finally {
+      setIsLoading(false);
     }
-  }
+  };
+  
+  const updateCustomerInfo = (field: keyof CustomerInfo, value: string) => {
+    setCustomerInfo(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -158,6 +271,80 @@ const BuyDialog = () => {
               max="5000"
             />
           </div>
+          
+          {/* Payment method selection */}
+          <div>
+            <Label>Payment Method</Label>
+            <RadioGroup
+              value={paymentMethod}
+              onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}
+              className="flex gap-4 mt-2"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="card" id="card" />
+                <Label htmlFor="card" className="flex items-center">
+                  <CreditCard className="w-4 h-4 mr-1" />
+                  Card
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="upi" id="upi" />
+                <Label htmlFor="upi" className="flex items-center">
+                  <QrCode className="w-4 h-4 mr-1" />
+                  UPI
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
+          
+          {!showCustomerInfo && (
+            <Button 
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => setShowCustomerInfo(true)}
+            >
+              Update Customer Information
+            </Button>
+          )}
+          
+          {showCustomerInfo && (
+            <div className="space-y-3 border p-3 rounded-md">
+              <h3 className="font-medium">Customer Information</h3>
+              <div>
+                <Label htmlFor="customerName">Full Name</Label>
+                <Input
+                  id="customerName"
+                  value={customerInfo.name}
+                  onChange={(e) => updateCustomerInfo('name', e.target.value)}
+                  placeholder="Full Name"
+                />
+              </div>
+              <div>
+                <Label htmlFor="customerEmail">Email</Label>
+                <Input
+                  id="customerEmail"
+                  type="email"
+                  value={customerInfo.email}
+                  onChange={(e) => updateCustomerInfo('email', e.target.value)}
+                  placeholder="Email Address"
+                />
+              </div>
+              <div>
+                <Label htmlFor="customerPhone">Phone</Label>
+                <Input
+                  id="customerPhone"
+                  type="tel"
+                  value={customerInfo.phone}
+                  onChange={(e) => updateCustomerInfo('phone', e.target.value)}
+                  placeholder="10-digit Phone Number"
+                  maxLength={10}
+                />
+              </div>
+            </div>
+          )}
+          
           <Button 
             type="submit" 
             className="w-full" 

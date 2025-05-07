@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 const Illustration: React.FC = () => {
@@ -22,10 +21,6 @@ const Illustration: React.FC = () => {
             <rect x="180" y="50" width="10" height="15" fill="#3e92cc" stroke="#0a2463" strokeWidth="0.5" />
             <rect x="160" y="75" width="10" height="15" fill="#3e92cc" stroke="#0a2463" strokeWidth="0.5" />
             <rect x="180" y="75" width="10" height="15" fill="#3e92cc" stroke="#0a2463" strokeWidth="0.5" />
-            
-            {/* Buildings */}
-            <rect x="110" y="60" width="30" height="40" fill="#f2f2f2" stroke="#0a2463" strokeWidth="1" />
-            <rect x="210" y="70" width="40" height="30" fill="#f2f2f2" stroke="#0a2463" strokeWidth="1" />
             
             {/* Ground */}
             <rect x="0" y="100" width="350" height="20" fill="#d8315b" opacity="0.1" />

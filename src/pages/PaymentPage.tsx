@@ -1,231 +1,224 @@
 import React, { useState, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import CashfreePayment from '@/components/payment/CashfreePayment';
-import { useNavigate } from 'react-router-dom';
-import { isMobileApp } from "../capacitor/cashfree";
+import { PaymentService } from '../lib/services/payment';
+
+// API URL for server status check
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5003';
 
 const PaymentPage: React.FC = () => {
-  const navigate = useNavigate();
-  const [amount, setAmount] = useState('100');
-  const [description, setDescription] = useState('Payment for services');
-  const [customerName, setCustomerName] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [paymentStarted, setPaymentStarted] = useState(false);
-  const [paymentStatus, setPaymentStatus] = useState<'success' | 'error' | null>(null);
-  const [statusMessage, setStatusMessage] = useState('');
-  const [errors, setErrors] = useState<{[key: string]: string}>({});
-  const isMobile = isMobileApp();
+  const [amount, setAmount] = useState<string>('100');
+  const [metal, setMetal] = useState<string>('gold');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  
+  // Customer details
+  const [customerName, setCustomerName] = useState<string>('');
+  const [customerEmail, setCustomerEmail] = useState<string>('');
+  const [customerPhone, setCustomerPhone] = useState<string>('');
 
-  // For development/demo purposes, you can prefill the form
+  // Check server status on component mount
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      // Populate with test data in development mode
-      if (!customerName && !customerEmail && !customerPhone) {
-        setCustomerName('Test User');
-        setCustomerEmail('test@example.com');
-        setCustomerPhone('9876543210');
+    const checkServerStatus = async () => {
+      try {
+        const response = await fetch(`${API_URL}`, { 
+          method: 'GET',
+          // Adding a timeout so we don't wait forever
+          signal: AbortSignal.timeout(5000)
+        });
+        
+        if (response.ok) {
+          setServerStatus('online');
+        } else {
+          setServerStatus('offline');
+        }
+      } catch (error) {
+        console.error('Server status check failed:', error);
+        setServerStatus('offline');
       }
-    }
-  }, [customerName, customerEmail, customerPhone]);
+    };
+    
+    checkServerStatus();
+  }, []);
 
-  const validateForm = () => {
-    const newErrors: {[key: string]: string} = {};
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+    setSuccess(null);
     
-    if (!customerName.trim()) {
-      newErrors.name = 'Name is required';
+    try {
+      // Check server status first
+      if (serverStatus === 'offline') {
+        throw new Error(`Cannot connect to payment server at ${API_URL}. Please make sure the server is running.`);
     }
     
-    if (!customerEmail.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(customerEmail)) {
-      newErrors.email = 'Email is invalid';
+      // Validate inputs
+      if (!customerName.trim()) {
+        throw new Error('Please enter your name');
+      }
+      
+      if (!customerEmail.trim() || !customerEmail.includes('@')) {
+        throw new Error('Please enter a valid email address');
     }
     
-    if (!customerPhone.trim()) {
-      newErrors.phone = 'Phone number is required';
-    } else if (!/^\d{10}$/.test(customerPhone.replace(/\D/g, ''))) {
-      newErrors.phone = 'Please enter a valid 10-digit phone number';
+      if (!customerPhone.trim() || customerPhone.length < 10) {
+        throw new Error('Please enter a valid phone number');
     }
     
-    const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      newErrors.amount = 'Please enter a valid amount greater than 0';
-    } else if (parsedAmount > 100000) {
-      newErrors.amount = 'Amount cannot exceed ₹100,000';
+      const amountValue = parseFloat(amount);
+      if (isNaN(amountValue) || amountValue <= 0) {
+        throw new Error('Please enter a valid amount');
+      }
+      
+      // Process payment using PaymentService
+      const result = await PaymentService.processPayment({
+        amount: amountValue,
+        metal,
+        customerName,
+        customerEmail,
+        customerPhone
+      });
+      
+      if (result.success) {
+        setSuccess(`Payment initiated successfully! Order ID: ${result.orderId}`);
+        // No need to redirect, processPayment already does this
+      } else {
+        setError(result.message || 'Payment initiation failed');
+      }
+    } catch (error: any) {
+      console.error('Payment submission error:', error);
+      setError(`Error: ${error.message || 'An unexpected error occurred'}`);
+    } finally {
+      setIsLoading(false);
     }
-    
-    if (!description.trim()) {
-      newErrors.description = 'Description is required';
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleStartPayment = () => {
-    if (validateForm()) {
-      setPaymentStarted(true);
-    }
-  };
-
-  const handlePaymentSuccess = (orderId: string) => {
-    setPaymentStatus('success');
-    setStatusMessage(`Payment successful! Order ID: ${orderId}`);
-    setPaymentStarted(false);
-    
-    // Navigate to payment success page after a short delay
-    setTimeout(() => {
-      navigate(`/payment-status?order_id=${orderId}`);
-    }, 1000);
-  };
-
-  const handlePaymentError = (error: any, orderId: string) => {
-    setPaymentStatus('error');
-    setStatusMessage(`Payment failed: ${error.message || 'Unknown error'}`);
-    setPaymentStarted(false);
-  };
-
-  const resetForm = () => {
-    setAmount('100');
-    setDescription('Payment for services');
-    setCustomerName('');
-    setCustomerEmail('');
-    setCustomerPhone('');
-    setPaymentStarted(false);
-    setPaymentStatus(null);
-    setStatusMessage('');
-    setErrors({});
   };
 
   return (
-    <div className="container mx-auto max-w-md py-8 px-4">
-      <h1 className="text-2xl font-bold mb-6">Make a Payment</h1>
+    <div className="max-w-md mx-auto my-10 p-6 bg-white rounded-lg shadow-lg">
+      <h1 className="text-2xl font-bold mb-6 text-center">Make a Payment</h1>
       
-      {paymentStatus === 'success' && (
-        <div className="bg-green-100 text-green-800 p-4 rounded-md mb-6">
-          {statusMessage}
+      {/* Server status indicator */}
+      <div className={`text-center mb-4 p-2 rounded ${
+        serverStatus === 'online' 
+          ? 'bg-green-100 text-green-700' 
+          : serverStatus === 'offline' 
+            ? 'bg-red-100 text-red-700' 
+            : 'bg-yellow-100 text-yellow-700'
+      }`}>
+        Server status: {
+          serverStatus === 'online' 
+            ? '✅ Online' 
+            : serverStatus === 'offline' 
+              ? '❌ Offline (Please start the server)' 
+              : '⏳ Checking...'
+        }
+      </div>
+      
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          {error}
+          
+          {error.includes('server') && (
+            <div className="mt-2 text-sm">
+              <p>Troubleshooting tips:</p>
+              <ul className="list-disc pl-5 mt-1">
+                <li>Make sure the server is running: <code>cd server && npm run dev</code></li>
+                <li>Check for errors in the server console</li>
+                <li>Verify the API URL is correct in your environment variables</li>
+              </ul>
+            </div>
+          )}
         </div>
       )}
       
-      {paymentStatus === 'error' && (
-        <div className="bg-red-100 text-red-800 p-4 rounded-md mb-6">
-          {statusMessage}
-          <button 
-            className="underline ml-2"
-            onClick={() => setPaymentStarted(false)}
+      {success && (
+        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+          {success}
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Metal Type
+            </label>
+          <select
+            value={metal}
+            onChange={(e) => setMetal(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            Try again
-          </button>
-        </div>
-      )}
-      
-      {!paymentStarted ? (
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="amount" className="block text-sm font-medium mb-1">
-              Amount (₹) <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="amount"
-              type="text"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className={`w-full p-2 border rounded-md ${errors.amount ? 'border-red-500' : ''}`}
-              placeholder="Enter amount"
-            />
-            {errors.amount && <p className="mt-1 text-red-500 text-sm">{errors.amount}</p>}
+            <option value="gold">Gold</option>
+            <option value="silver">Silver</option>
+          </select>
           </div>
           
           <div>
-            <label htmlFor="description" className="block text-sm font-medium mb-1">
-              Description <span className="text-red-500">*</span>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Amount (₹)
             </label>
             <input
-              id="description"
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className={`w-full p-2 border rounded-md ${errors.description ? 'border-red-500' : ''}`}
-              placeholder="Payment for..."
-            />
-            {errors.description && <p className="mt-1 text-red-500 text-sm">{errors.description}</p>}
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            min="1"
+            step="1"
+            required
+          />
           </div>
           
           <div>
-            <label htmlFor="name" className="block text-sm font-medium mb-1">
-              Full Name <span className="text-red-500">*</span>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Full Name
             </label>
             <input
-              id="name"
               type="text"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
-              className={`w-full p-2 border rounded-md ${errors.name ? 'border-red-500' : ''}`}
-              placeholder="Enter your name"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
             />
-            {errors.name && <p className="mt-1 text-red-500 text-sm">{errors.name}</p>}
           </div>
           
           <div>
-            <label htmlFor="email" className="block text-sm font-medium mb-1">
-              Email <span className="text-red-500">*</span>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Email
             </label>
             <input
-              id="email"
               type="email"
               value={customerEmail}
               onChange={(e) => setCustomerEmail(e.target.value)}
-              className={`w-full p-2 border rounded-md ${errors.email ? 'border-red-500' : ''}`}
-              placeholder="Enter your email"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
             />
-            {errors.email && <p className="mt-1 text-red-500 text-sm">{errors.email}</p>}
           </div>
           
           <div>
-            <label htmlFor="phone" className="block text-sm font-medium mb-1">
-              Phone Number <span className="text-red-500">*</span>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Phone Number
             </label>
             <input
-              id="phone"
               type="tel"
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value)}
-              className={`w-full p-2 border rounded-md ${errors.phone ? 'border-red-500' : ''}`}
-              placeholder="Enter your phone number"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
             />
-            {errors.phone && <p className="mt-1 text-red-500 text-sm">{errors.phone}</p>}
           </div>
           
           <button
-            onClick={handleStartPayment}
-            className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700"
+          type="submit"
+          className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-blue-300"
+          disabled={isLoading || serverStatus === 'offline'}
           >
-            {isMobile ? 'Pay Now' : 'Proceed to Payment'}
+          {isLoading ? 'Processing...' : 'Pay Now'}
           </button>
+      </form>
+      
+      <div className="mt-6 text-center text-sm text-gray-500">
+        Secured by Cashfree Payment Gateway
         </div>
-      ) : (
-        <>
-          <CashfreePayment
-            orderAmount={Number(amount)}
-            orderId={`order_${uuidv4().replace(/-/g, '')}`}
-            customerDetails={{
-              customerId: `customer_${uuidv4().replace(/-/g, '')}`,
-              customerName,
-              customerEmail,
-              customerPhone
-            }}
-            onPaymentSuccess={handlePaymentSuccess}
-            onPaymentError={handlePaymentError}
-          />
-          <button
-            onClick={() => setPaymentStarted(false)}
-            className="mt-4 text-blue-600 text-sm"
-          >
-            ← Back to payment details
-          </button>
-        </>
-      )}
     </div>
   );
 };

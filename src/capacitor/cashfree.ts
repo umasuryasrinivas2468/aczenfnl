@@ -15,7 +15,7 @@ export interface CashfreePlugin {
   }): Promise<{ status: string; orderId: string }>;
 }
 
-// Register the plugin
+// Register the plugin - this will connect to our Native implementation in CashfreePlugin.java
 const CashfreePayment = registerPlugin<CashfreePlugin>('CashfreePayment');
 
 // Helper function to check if we're running on mobile
@@ -25,4 +25,4 @@ export const isMobileApp = () => Capacitor.isNativePlatform();
 export const isAndroidDevice = () => Capacitor.getPlatform() === 'android';
 
 // Export the plugin - will be null on web
-export const Cashfree = isMobileApp() ? CashfreePayment : null; 
+export const Cashfree = isMobileApp() ? CashfreePayment : null;

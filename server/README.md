@@ -10,10 +10,11 @@ This server handles the backend integration with Cashfree Payment Gateway for th
    npm install
    ```
 
-2. Configure Cashfree API credentials in `config/cashfree.js`:
-   - Ensure `appId` and `secretKey` are correctly set
-   - Set the appropriate API base URL
-   - Use 'PRODUCTION' mode for live payments
+2. Configure Cashfree API credentials:
+   - Copy `config/cashfree.example.js` to `config/cashfree.js`
+   - Add your Cashfree API credentials to the new file
+   - Never commit the `cashfree.js` file with real credentials to version control
+   - Set the appropriate mode ('TEST' or 'PRODUCTION')
 
 3. Start the server:
    ```
@@ -155,10 +156,28 @@ Your frontend can integrate with this server in two ways:
 
 ## Security Considerations
 
-- All Cashfree credentials are stored securely server-side
-- Webhook signature verification ensures payment notifications are authentic
-- CORS is configured to restrict API access
-- Input validation prevents malicious requests
+- **API Credentials Protection**:
+  - All Cashfree credentials have been replaced with placeholders
+  - Before running the application, you must add your own credentials in `config/cashfree.js`
+  - Add `server/config/cashfree.js` to your `.gitignore` to prevent accidentally pushing credentials to GitHub
+  - Consider using environment variables for production deployments
+
+- **Environment Variable Alternative**:
+  You can also use environment variables for credentials:
+  ```
+  # In your .env file
+  CASHFREE_APP_ID=your_app_id_here
+  CASHFREE_SECRET_KEY=your_secret_key_here
+  CASHFREE_MODE=PRODUCTION
+  ```
+
+- **Webhook Signature Verification**:
+  - All webhook notifications are verified using cryptographic signatures
+  - Never skip signature verification in production
+
+- **CORS Configuration**:
+  - CORS is configured to restrict API access
+  - Customize the CORS settings in `server/index.js` for production
 
 ## Testing
 

@@ -4,6 +4,64 @@
 
 **URL**: https://lovable.dev/projects/d3e274db-dbf0-4510-b86b-54765d204ad4
 
+## Environment Setup
+
+Before running the application, you need to set up your environment:
+
+1. **Create Environment Files**:
+   - Copy `.env.example` to `.env` in the root directory
+   - Copy `server/config/cashfree.example.js` to `server/config/cashfree.js`
+
+2. **Add Your Cashfree Credentials**:
+   - Update `.env` with your Cashfree App ID:
+     ```
+     VITE_CASHFREE_APP_ID=your_app_id_here
+     ```
+   - Update `server/config/cashfree.js` with your Cashfree credentials:
+     ```js
+     export const cashfreeConfig = {
+       appId: 'your_app_id_here',
+       secretKey: 'your_secret_key_here',
+       mode: 'PRODUCTION', // Or 'TEST' for sandbox
+       apiBase: 'https://api.cashfree.com/pg'
+     };
+     ```
+
+3. **Important Security Note**:
+   - Never commit files containing real API credentials to version control
+   - Make sure `.env` and `server/config/cashfree.js` are in your `.gitignore`
+
+## Development
+
+Follow these steps to start the development server:
+
+1. Install dependencies:
+   ```
+   npm install
+   ```
+
+2. Start the frontend development server:
+   ```
+   npm run dev
+   ```
+
+3. Start the backend server (in a separate terminal):
+   ```
+   cd server
+   npm install
+   npm run dev
+   ```
+
+## Building for Production
+
+To build the application for production:
+
+```
+npm run build
+```
+
+The build output will be in the `dist` folder.
+
 ## How can I edit this code?
 
 There are several ways of editing your application.

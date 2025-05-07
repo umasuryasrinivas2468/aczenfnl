@@ -1,21 +1,27 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "com.wealth.horizon.bloom"
-    compileSdk rootProject.ext.compileSdkVersion
+    namespace "com.wealthhorizon.app"
+    compileSdkVersion rootProject.ext.compileSdkVersion
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
     defaultConfig {
-        applicationId "com.wealth.horizon.bloom"
+        applicationId "com.wealthhorizon.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
         aaptOptions {
-             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
-             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+
     buildTypes {
         release {
             minifyEnabled false
@@ -25,10 +31,8 @@ android {
 }
 
 repositories {
-    maven {
-        url "https://jitpack.io"
-    }
-    flatDir{
+    maven { url "https://jitpack.io" }
+    flatDir {
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
     }
 }
@@ -43,19 +47,21 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
-    
-    // Cashfree SDK dependencies
-    implementation 'com.cashfree.pg:api:2.2.0'
-    implementation 'com.cashfree.pg:core:2.2.0'
+
+    // Required support dependencies
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
 }
 
+// Apply Capacitor configuration
 apply from: 'capacitor.build.gradle'
 
+// Apply Google Services if config file exists
 try {
     def servicesJSON = file('google-services.json')
     if (servicesJSON.text) {
         apply plugin: 'com.google.gms.google-services'
     }
-} catch(Exception e) {
+} catch (Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
 }

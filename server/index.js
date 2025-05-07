@@ -7,9 +7,9 @@ const cashfreeRoutes = require('./api/create-cashfree-order');
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5002;
+const PORT = process.env.PORT || 5004;
 
-// CORS configuration
+// CORS configuration - Allow all origins for development
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST'],
@@ -23,6 +23,12 @@ app.use((req, res, next) => {
   next();
 });
 
+// Log all incoming requests
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
 // Middleware
 app.use(express.json());
 
@@ -31,13 +37,22 @@ app.use('/api', cashfreeRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
-  res.send('Server is running');
+  res.json({
+    status: 'Server is running',
+    message: 'Cashfree payment server is operational',
+    version: '1.0.0',
+    endpoints: {
+      createOrder: '/api/create-cashfree-order',
+      checkStatus: '/api/payment-status/:orderId'
+    }
+  });
 });
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`Server accessible at http://192.168.1.6:${PORT}`);
+  console.log(`Server accessible at http://localhost:${PORT}`);
+  console.log('Cashfree API Integration ready!');
 });
 
 module.exports = app; 

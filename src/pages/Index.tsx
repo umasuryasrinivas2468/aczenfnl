@@ -7,7 +7,6 @@ import MainActions from '../components/MainActions';
 import FeatureIcons from '../components/FeatureIcons';
 import InviteEarn from '../components/InviteEarn';
 import Illustration from '../components/Illustration';
-import MadeInIndia from '../components/MadeInIndia';
 import { usePreciousMetalPrices } from '../hooks/usePreciousMetalPrices';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { User, Tag, Trophy, Package } from 'lucide-react';
@@ -188,23 +187,9 @@ const Index: React.FC = () => {
           
           <MainActions />
           
-          {/* Payment Gateway Test Button */}
-          <div className="bg-blue-800 rounded-xl p-4 mt-4">
-            <h3 className="text-xl font-semibold mb-2">Test Cashfree Payment</h3>
-            <p className="text-sm mb-3">Try our payment integration for mobile</p>
-            <button 
-              onClick={() => navigate('/payment')}
-              className="w-full bg-white text-blue-800 font-bold py-2 rounded-lg"
-            >
-              Go to Payment Page
-            </button>
-          </div>
-          
           <FeatureIcons />
           
           <InviteEarn />
-          
-          <MadeInIndia />
           
           <Illustration />
         </div>

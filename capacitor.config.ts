@@ -1,20 +1,18 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.wealth.horizon.bloom',
+  appId: 'com.wealthhorizon.app',
   appName: 'wealth-horizon-bloom',
   webDir: 'dist',
   server: {
-    url: 'http://192.168.1.6:8080',
-    cleartext: true
+    androidScheme: 'https',
+    // Use your local IPv4 address for mobile testing
+    url: 'http://192.168.1.7:8084',
+    cleartext: true,
+    allowNavigation: ['*']
   },
   android: {
-    buildOptions: {
-      keystorePath: undefined,
-      keystorePassword: undefined,
-      keystoreAlias: undefined,
-      keystoreAliasPassword: undefined,
-    }
+    allowMixedContent: true
   }
 };
 
