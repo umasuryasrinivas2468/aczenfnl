@@ -119,7 +119,7 @@ const CashfreePayment: React.FC<CashfreePaymentProps> = ({
     // For production, use a consistent server URL
     // For local development, derive from window.location
     if (process.env.NODE_ENV === 'production') {
-      return 'https://aczenfnl.onrender.com/';
+      return 'https://aczenfnl.onrender.com';
     }
     
     const protocol = window.location.protocol;
