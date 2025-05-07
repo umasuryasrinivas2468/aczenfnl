@@ -1,7 +1,7 @@
 const http = require('http');
 
 // Server URL
-const SERVER_URL = 'http://localhost:5004';
+const SERVER_URL = 'http://localhost:5000';
 
 // Function to check if server is running
 function checkServer() {

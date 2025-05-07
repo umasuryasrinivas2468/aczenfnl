@@ -20,14 +20,14 @@ const PaymentSuccess: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Helper function to get server URL - ALWAYS use port 5004
+  // Helper function to get server URL - ALWAYS use port 5000
   const getServerUrl = () => {
     if (process.env.NODE_ENV === 'production') {
       return 'https://wealth-horizon-bloom.com';
     }
     const protocol = window.location.protocol;
     const hostname = window.location.hostname;
-    return `${protocol}//${hostname}:5004`; // Hardcoded to 5004
+    return `${protocol}//${hostname}:5000`; // Hardcoded to 5000
   };
 
   useEffect(() => {
@@ -207,7 +207,7 @@ const PaymentSuccess: React.FC = () => {
                   <div className="mt-4 text-sm">
                     <p className="font-semibold">Troubleshooting:</p>
                     <ul className="text-left list-disc pl-5 mt-1">
-                      <li>Make sure the server is running on port 5004</li>
+                      <li>Make sure the server is running on port 5000</li>
                       <li>Try running the server with: <code className="bg-red-100 px-1">cd server && node index.js</code></li>
                       <li>Check for errors in the server console</li>
                     </ul>

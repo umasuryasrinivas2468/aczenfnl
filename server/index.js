@@ -1,58 +1,161 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
-const cashfreeRoutes = require('./api/create-cashfree-order');
+const axios = require('axios');
+const crypto = require('crypto');
+const path = require('path');
+const config = require('./config');
+const { Cashfree } = require('cashfree-pg');
 
-// Load environment variables from .env file
-dotenv.config();
+// Initialize Cashfree with v4 style 
+try {
+  // Set credentials
+  Cashfree.XClientId = config.cashfree.appId;
+  Cashfree.XClientSecret = config.cashfree.secretKey;
 
-const app = express();
-const PORT = process.env.PORT || 5004;
-
-// CORS configuration - Allow all origins for development
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'Origin', 'X-Requested-With']
-}));
-
-// Additional security headers
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Content-Security-Policy', "default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * 'unsafe-inline'; img-src * data: blob: 'unsafe-inline'; frame-src *; style-src * 'unsafe-inline';");
-  next();
-});
-
-// Log all incoming requests
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  next();
-});
-
-// Middleware
-app.use(express.json());
-
-// Routes
-app.use('/api', cashfreeRoutes);
-
-// Root endpoint
-app.get('/', (req, res) => {
-  res.json({
-    status: 'Server is running',
-    message: 'Cashfree payment server is operational',
-    version: '1.0.0',
-    endpoints: {
-      createOrder: '/api/create-cashfree-order',
-      checkStatus: '/api/payment-status/:orderId'
+  // FORCE PRODUCTION ENVIRONMENT
+  Cashfree.XEnvironment = 'PRODUCTION';
+  
+  // Create a custom axios instance for Cashfree
+  const cashfreeAxios = axios.create({
+    baseURL: 'https://api.cashfree.com/pg',
+    headers: {
+      'x-client-id': config.cashfree.appId,
+      'x-client-secret': config.cashfree.secretKey,
+      'x-api-version': config.cashfree.apiVersion,
+      'Content-Type': 'application/json'
     }
   });
+  
+  // Override Cashfree's default axios with our configured one
+  // This is a bit of a hack, but necessary to force the production URL
+  if (Cashfree.axios) {
+    Cashfree.axios = cashfreeAxios;
+  }
+
+  // Print debug information for verification
+  console.log('Cashfree SDK initialized with:');
+  console.log('Environment:', Cashfree.XEnvironment);
+  console.log('App ID is configured:', !!Cashfree.XClientId);
+  console.log('Secret Key is configured:', !!Cashfree.XClientSecret);
+  console.log('Base URL will be:', 'https://api.cashfree.com/pg');
+} catch (err) {
+  console.error('Error initializing Cashfree SDK:', err);
+}
+
+const app = express();
+const PORT = config.port;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Serve static files from public folder
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Import routes
+const paymentRoutes = require('./routes/payment');
+
+// Use routes
+app.use('/api/payments', paymentRoutes);
+
+// Add API endpoint matching exactly the Cashfree documentation example
+app.post('/api/create-cashfree-order', async (req, res) => {
+  try {
+    console.log('Received order request:', req.body);
+    
+    // Extract request data
+    const { 
+      orderAmount, 
+      orderId = `order_${Date.now()}`, 
+      customerDetails,
+      orderMeta
+    } = req.body;
+    
+    // Validate required fields
+    if (!orderAmount || !customerDetails || !customerDetails.customerPhone) {
+      return res.status(400).json({ 
+        message: 'Missing required fields' 
+      });
+    }
+
+    // Create the request payload exactly as in the Cashfree documentation
+    const request = {
+      order_amount: parseFloat(orderAmount),
+      order_currency: "INR",
+      order_id: orderId,
+      customer_details: {
+        customer_id: customerDetails.customerId || `customer_${Date.now()}`,
+        customer_name: customerDetails.customerName || "Customer",
+        customer_email: customerDetails.customerEmail || "customer@example.com",
+        customer_phone: customerDetails.customerPhone
+      },
+      order_meta: orderMeta || {
+        return_url: "https://your-secure-domain.com/api/payments/payment-success?order_id={order_id}"
+      }
+    };
+
+    console.log('Creating order with Cashfree SDK:', JSON.stringify(request, null, 2));
+    console.log('Using API version:', config.cashfree.apiVersion);
+
+    // Use Cashfree SDK to create the order
+    try {
+      console.log('Using API version:', config.cashfree.apiVersion);
+      
+      // Try to use the SDK method first
+      let response;
+      try {
+        // Using our patched PGCreateOrder method that we added above
+        response = await Cashfree.PGCreateOrder(config.cashfree.apiVersion, request);
+      } catch (sdkError) {
+        console.warn('SDK method failed, trying direct API call:', sdkError.message);
+        
+        // If SDK method fails, use a direct API call
+        response = await axios({
+          method: 'post',
+          url: 'https://api.cashfree.com/pg/orders',
+          headers: {
+            'x-client-id': config.cashfree.appId,
+            'x-client-secret': config.cashfree.secretKey,
+            'x-api-version': config.cashfree.apiVersion,
+            'Content-Type': 'application/json'
+          },
+          data: request
+        });
+      }
+      
+      console.log('Order created successfully:', response.data);
+      
+      // Return exact response format - no wrapping in success/data fields
+      res.status(200).json(response.data);
+    } catch (sdkError) {
+      console.error('Cashfree SDK error:', sdkError);
+      
+      // Extract and return error details
+      const errorResponse = sdkError.response && sdkError.response.data 
+        ? sdkError.response.data 
+        : { message: sdkError.message || 'Failed to create order' };
+      
+      res.status(500).json(errorResponse);
+    }
+  } catch (error) {
+    console.error('Error processing order request:', error);
+    res.status(500).json({ 
+      message: 'Internal server error',
+      error: error.message 
+    });
+  }
+});
+
+// Home route - serves the index.html from public folder
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Server accessible at http://localhost:${PORT}`);
-  console.log('Cashfree API Integration ready!');
-});
-
-module.exports = app; 
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+  console.log(`Cashfree Environment: ${config.cashfree.environment}`);
+  console.log(`Visit http://localhost:${PORT} to test payment integration`);
+}); 

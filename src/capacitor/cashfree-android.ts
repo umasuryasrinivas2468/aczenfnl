@@ -19,7 +19,7 @@ interface CashfreePaymentConfig {
 
 class CashfreeAndroid {
   private static readonly APP_ID = '850529145692c9f93773ed2c0a925058';
-  private static readonly API_URL = 'http://192.168.1.7:5004'; // Use local IPv4 address for physical device testing
+  private static readonly API_URL = 'http://192.168.1.7:5000'; // Use local IPv4 address for physical device testing
 
   static async initializePayment(config: Partial<CashfreePaymentConfig>) {
     try {

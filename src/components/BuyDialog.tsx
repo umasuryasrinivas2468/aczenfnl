@@ -14,10 +14,10 @@ import { useToast } from "@/hooks/use-toast"
 import { Coins, CreditCard, QrCode } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useLocalStorage } from "@/hooks/useLocalStorage"
-import { PaymentService } from '@/lib/services/payment'
+import { PaymentService, PaymentDetails } from '@/lib/services/payment'
 
-// API URL - hardcode to use port 5004 always
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5004';
+// API URL - hardcode to use port 5000 always
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // Customer info interface
 interface CustomerInfo {
@@ -133,66 +133,28 @@ const BuyDialog = () => {
     setIsLoading(true)
 
     try {
-      console.log("Initiating payment process with server:", API_URL);
-      
-      // Direct API calls to ensure consistent behavior
-      // Step 1: Create order
-      const createOrderResponse = await fetch(`${API_URL}/api/create-cashfree-order`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          orderAmount: amountValue,
-          orderId: `order_${Date.now()}`,
-          customerDetails: {
-            customerId: `customer_${Date.now()}`,
+      // Use the PaymentService instead of direct API calls
+      const paymentDetails: PaymentDetails = {
+        amount: amountValue,
+        metal: metal,
         customerName: customerInfo.name,
         customerEmail: customerInfo.email,
-            customerPhone: customerInfo.phone
-          }
-        })
-      });
+        customerPhone: customerInfo.phone,
+        paymentMethod: paymentMethod
+      };
       
-      if (!createOrderResponse.ok) {
-        const errorData = await createOrderResponse.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server error: ${createOrderResponse.status}`);
-      }
+      const result = await PaymentService.processPayment(paymentDetails);
       
-      const orderData = await createOrderResponse.json();
-      console.log('Order created:', orderData);
-      
-      // Step 2: Get payment link directly
-      const paymentLinkResponse = await fetch(`${API_URL}/api/create-payment-token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          orderId: orderData.order_id
-        })
-      });
-      
-      if (!paymentLinkResponse.ok) {
-        const errorData = await paymentLinkResponse.json().catch(() => ({}));
-        throw new Error(errorData.error || errorData.message || `Payment link error: ${paymentLinkResponse.status}`);
-      }
-      
-      const paymentData = await paymentLinkResponse.json();
-      console.log('Payment link generated:', paymentData);
-      
-      // Step 3: Redirect to the payment page
-      if (paymentData.payment_link) {
+      if (result.success) {
         toast({
           title: "Payment Initiated",
-          description: `Redirecting to payment gateway...`,
+          description: `Opening Cashfree checkout...`,
         });
         
-        // Close dialog and redirect
+        // Close dialog
         setIsOpen(false);
-        window.location.href = paymentData.payment_link;
       } else {
-        throw new Error('No payment link received from server');
+        throw new Error(result.message || 'Failed to initiate payment');
       }
     } catch (error: any) {
       console.error('Payment error:', error);

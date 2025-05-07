@@ -1,5 +1,5 @@
-// API URL - hardcode to use port 5004 always
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5004';
+// API URL - hardcode to use port 5000 always
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export interface PaymentDetails {
   amount: number;
@@ -71,36 +71,22 @@ export class PaymentService {
         
         const orderData = await createOrderResponse.json();
         console.log('Order created:', orderData);
-      
-        // Step 2: Get payment link directly from backend
-        const paymentLinkResponse = await fetch(`${API_URL}/api/create-payment-token`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            orderId: orderData.order_id
-          })
-        });
         
-        if (!paymentLinkResponse.ok) {
-          const errorData = await paymentLinkResponse.json().catch(() => ({}));
-          throw new Error(errorData.error || errorData.message || `Payment link error: ${paymentLinkResponse.status}`);
-        }
-        
-        const paymentData = await paymentLinkResponse.json();
-        console.log('Payment link generated:', paymentData);
-        
-        // Step 3: Redirect to the payment page provided by the backend
-        if (paymentData.payment_link) {
-          window.location.href = paymentData.payment_link;
-          return { 
-            success: true, 
+        // Step 2: Redirect to Cashfree payment page
+        if (orderData.payment_session_id) {
+          const paymentUrl = `https://payments.cashfree.com/order/#${orderData.payment_session_id}`;
+          console.log('Redirecting to payment URL:', paymentUrl);
+          
+          // Redirect to payment page
+          window.location.href = paymentUrl;
+          
+          return {
+            success: true,
             orderId: orderData.order_id,
-            paymentLink: paymentData.payment_link
+            paymentLink: paymentUrl
           };
         } else {
-          throw new Error('No payment link received from server');
+          throw new Error('No payment session ID received from server');
         }
       } catch (networkError: any) {
         console.error('Network error:', networkError);
