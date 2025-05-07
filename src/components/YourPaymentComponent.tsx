@@ -21,7 +21,7 @@ const YourPaymentComponent = () => {
       
       // In a real implementation, you would call your backend to create a payment session
       // For example:
-      // const response = await fetch('http://localhost:5000/api/create-cashfree-order', {
+      // const response = await fetch('https://aczenfnl.onrender.com/api/create-cashfree-order', {
       //   method: 'POST',
       //   headers: { 'Content-Type': 'application/json' },
       //   body: JSON.stringify({ orderId, amount: 100 })

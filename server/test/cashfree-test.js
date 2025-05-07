@@ -11,7 +11,7 @@ const crypto = require('crypto');
 const config = require('../config');
 
 // Constants for testing
-const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:5000';
+const BASE_URL = process.env.TEST_BASE_URL || 'https://aczenfnl.onrender.com';
 const APP_ID = config.cashfree.appId || process.env.CASHFREE_APP_ID;
 const SECRET_KEY = config.cashfree.secretKey || process.env.CASHFREE_SECRET_KEY;
 const API_VERSION = config.cashfree.apiVersion || process.env.CASHFREE_API_VERSION || '2022-09-01';

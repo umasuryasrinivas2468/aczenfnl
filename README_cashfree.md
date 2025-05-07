@@ -32,7 +32,6 @@ npm install
 # Start the frontend development server
 npm run dev
 ```
-
 ### 3. Run Both Together
 
 ```sh

@@ -1,5 +1,5 @@
 // API URL - hardcode to use port 5000 always
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL || 'https://aczenfnl.onrender.com';
 
 export interface PaymentDetails {
   amount: number;

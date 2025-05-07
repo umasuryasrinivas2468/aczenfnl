@@ -1,7 +1,7 @@
 const fetch = require('node-fetch');
 
 // Server URL
-const SERVER_URL = 'http://localhost:5003';
+const SERVER_URL = 'https://aczenfnl.onrender.com/';
 
 async function testServer() {
   console.log('Testing Cashfree Payment Server...');

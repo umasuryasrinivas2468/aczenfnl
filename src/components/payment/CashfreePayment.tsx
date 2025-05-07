@@ -119,12 +119,12 @@ const CashfreePayment: React.FC<CashfreePaymentProps> = ({
     // For production, use a consistent server URL
     // For local development, derive from window.location
     if (process.env.NODE_ENV === 'production') {
-      return 'https://wealth-horizon-bloom.com';
+      return 'https://aczenfnl.onrender.com/';
     }
     
     const protocol = window.location.protocol;
     const hostname = window.location.hostname;
-    const port = window.location.port || '5002';
+    const port = window.location.port || '5000';
     return `${protocol}//${hostname}:${port}`; // Use current port or fallback to 5002
   };
 
