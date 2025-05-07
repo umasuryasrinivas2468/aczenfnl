@@ -1,11 +1,5 @@
 import React, { useRef, useState } from 'react';
 import { Card, CardContent } from './ui/card';
-import { 
-  Building2, 
-  Plane, 
-  Train, 
-  Bus
-} from 'lucide-react';
 
 const HeroSection: React.FC = () => {
   const sliderRef = useRef<HTMLDivElement>(null);
@@ -13,34 +7,22 @@ const HeroSection: React.FC = () => {
   
   const slides = [
     {
-      title: '',
-      description: '',
-      icon: Building2,
-      color: 'bg-purple-500',
       imageUrl: 'https://i.imgur.com/CTwpLo8.png'
     },
     {
-      title: 'Flights',
-      description: 'Explore the world with affordable flights',
-      icon: Plane,
-      color: 'bg-blue-500',
       imageUrl: 'https://i.imgur.com/UHSHoI5.png'
     },
     {
-      title: 'Trains',
-      description: 'Hassle-free train tickets at best prices',
-      icon: Train,
-      color: 'bg-green-500',
       imageUrl: 'https://i.imgur.com/CTwpLo8.png'
     },
     {
-      title: 'Bus',
-      description: 'Comfortable bus journeys across cities',
-      icon: Bus,
-      color: 'bg-orange-500',
       imageUrl: 'https://i.imgur.com/UHSHoI5.png'
     }
   ];
+
+  const handleImageClick = () => {
+    window.location.href = 'https://aczen.in';
+  };
   
   return (
     <div className="relative">
@@ -53,23 +35,16 @@ const HeroSection: React.FC = () => {
           <Card 
             key={index} 
             className="flex-shrink-0 snap-center w-full rounded-xl border-none shadow-md overflow-hidden"
+            onClick={handleImageClick}
+            style={{ cursor: 'pointer' }}
           >
             <CardContent className="p-0">
               <div className="flex flex-col h-full">
-                <div className={`${slide.color} p-6 text-white`}>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-xl font-semibold">{slide.title}</h3>
-                      <p className="text-sm opacity-80 mt-1">{slide.description}</p>
-                    </div>
-                    <slide.icon size={28} />
-                  </div>
-                </div>
-                <div className="p-4 bg-white">
+                <div className="p-0 bg-white">
                   <img 
                     src={slide.imageUrl} 
-                    alt={slide.title} 
-                    className="w-full h-32 object-contain"
+                    alt="Slide image" 
+                    className="w-full h-48 object-contain"
                   />
                 </div>
               </div>

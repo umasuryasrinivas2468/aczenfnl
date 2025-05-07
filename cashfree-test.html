@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Cashfree SDK Test</title>
+  <script src="https://sdk.cashfree.com/js/ui/2.0.0/cashfree.prod.js"></script>
+</head>
+<body>
+  <h1>Cashfree SDK Test</h1>
+  <button onclick="testCashfree()">Test Cashfree</button>
+
+  <script>
+    function testCashfree() {
+      try {
+        console.log('Cashfree available:', !!window.Cashfree);
+        
+        // Check the type of Cashfree
+        console.log('Cashfree type:', typeof window.Cashfree);
+        
+        // Initialize without 'new'
+        const cashfree = window.Cashfree({
+          mode: "test" // Use test mode for testing
+        });
+        
+        console.log('Cashfree initialized:', cashfree);
+        
+        // Log the checkout method
+        console.log('Checkout method available:', !!cashfree.checkout);
+        
+        alert('Cashfree SDK test successful. Check console for details.');
+      } catch (error) {
+        console.error('Error testing Cashfree:', error);
+        alert('Cashfree SDK test failed: ' + error.message);
+      }
+    }
+  </script>
+</body>
+</html> 

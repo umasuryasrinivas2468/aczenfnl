@@ -107,13 +107,7 @@ const Rewards: React.FC = () => {
   ];
 
   // Currency display at top
-  const currencies = [
-    { icon: "🪙", value: "3,61,357", background: "bg-yellow-900/70", label: "Coins" },
-    { icon: "💷", value: "₹243", background: "bg-purple-900/70", label: "Cash" },
-    { icon: "🎫", value: "1", background: "bg-green-900/70", label: "Ticket" },
-  ];
-
-  // Product cards for big wins
+ // Product cards for big wins
   const bigWins = [
     {
       product: "smartwatch",

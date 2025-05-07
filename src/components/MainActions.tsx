@@ -29,7 +29,7 @@ const MainActions: React.FC = () => {
         <Button 
           variant="outline" 
           className="flex-1 h-12 border-gray-700 text-white bg-gray-900 hover:bg-gray-800 rounded-lg"
-          onClick={() => navigate('/rewards')}
+          onClick={() => navigate('/rewards-new')}
         >
           <Award className="mr-2" size={16} />
           Rewards
