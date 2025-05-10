@@ -13,14 +13,25 @@ export interface PaymentResult {
   success: boolean;
   orderId?: string;
   message?: string;
-  paymentLink?: string;
+  paymentSessionId?: string;
 }
 
+/**
+ * Modern PaymentService using the new Cashfree JS SDK
+ */
 export class PaymentService {
-  static async processPayment(details: PaymentDetails): Promise<PaymentResult> {
+  /**
+   * Create a payment session and return the session ID
+   * 
+   * @param details Payment details
+   * @returns Payment result with session ID
+   */
+  static async createPaymentSession(details: PaymentDetails): Promise<PaymentResult> {
     try {
+      // Generate order ID client-side
       const orderId = `order_${Date.now()}`;
       
+      // Store transaction data in local storage
       const transactionData = {
         id: orderId,
         type: details.metal,
@@ -34,6 +45,7 @@ export class PaymentService {
       console.log(`Making API request to: ${API_URL}/api/create-cashfree-order`);
       
       try {
+        // Create order on the backend
         const createOrderResponse = await fetch(`${API_URL}/api/create-cashfree-order`, {
           method: 'POST',
           headers: {
@@ -59,16 +71,12 @@ export class PaymentService {
         const orderData = await createOrderResponse.json();
         console.log('Order created:', orderData);
         
+        // Return the payment session ID instead of redirecting
         if (orderData.payment_session_id) {
-          const paymentUrl = `https://payments.cashfree.com/order/#${orderData.payment_session_id}`;
-          console.log('Redirecting to payment URL:', paymentUrl);
-          
-          window.location.href = paymentUrl;
-          
           return {
             success: true,
             orderId: orderData.order_id,
-            paymentLink: paymentUrl
+            paymentSessionId: orderData.payment_session_id
           };
         } else {
           throw new Error('No payment session ID received from server');
@@ -86,8 +94,15 @@ export class PaymentService {
     }
   }
   
+  /**
+   * Verify payment status
+   * 
+   * @param orderId Order ID to verify
+   * @returns Payment verification result
+   */
   static async verifyPayment(orderId: string): Promise<PaymentResult> {
     try {
+      // Call the backend API to verify the payment
       const response = await fetch(`${API_URL}/api/payment-status/${orderId}`);
       
       if (!response.ok) {
@@ -97,6 +112,7 @@ export class PaymentService {
       
       const data = await response.json();
       
+      // Check the payment status from Cashfree
       const isPaymentSuccessful = data.order_status === 'PAID';
       
       return {
@@ -114,4 +130,4 @@ export class PaymentService {
       };
     }
   }
-}
+} 

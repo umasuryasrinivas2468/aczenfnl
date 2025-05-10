@@ -14,7 +14,8 @@ import { useToast } from "@/hooks/use-toast"
 import { Coins, CreditCard, QrCode } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useLocalStorage } from "@/hooks/useLocalStorage"
-import { PaymentService, PaymentDetails } from '@/lib/services/payment'
+import { PaymentService, PaymentDetails } from '@/lib/services/paymentService'
+import CashfreeCheckout from './payment/CashfreeCheckout'
 
 // API URL - hardcode to use port 5000 always
 const API_URL = import.meta.env.VITE_API_URL || 'https://aczenfnl.onrender.com';
@@ -37,6 +38,8 @@ const BuyDialog = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [showCustomerInfo, setShowCustomerInfo] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card')
+  const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null)
+  const [orderId, setOrderId] = useState<string | null>(null)
   
   const [customerInfo, setCustomerInfo] = useLocalStorage<CustomerInfo>('customerInfo', {
     name: '',
@@ -133,7 +136,7 @@ const BuyDialog = () => {
     setIsLoading(true)
 
     try {
-      // Use the PaymentService instead of direct API calls
+      // Use the new PaymentService instead of direct API calls
       const paymentDetails: PaymentDetails = {
         amount: amountValue,
         metal: metal,
@@ -143,16 +146,17 @@ const BuyDialog = () => {
         paymentMethod: paymentMethod
       };
       
-      const result = await PaymentService.processPayment(paymentDetails);
+      // Create payment session using the new method
+      const result = await PaymentService.createPaymentSession(paymentDetails);
       
-      if (result.success) {
-        toast({
-          title: "Payment Initiated",
-          description: `Opening Cashfree checkout...`,
-        });
+      if (result.success && result.paymentSessionId) {
+        setPaymentSessionId(result.paymentSessionId);
+        setOrderId(result.orderId || null);
         
-        // Close dialog
-        setIsOpen(false);
+        toast({
+          title: "Payment Ready",
+          description: "Payment session created successfully",
+        });
       } else {
         throw new Error(result.message || 'Failed to initiate payment');
       }
@@ -178,6 +182,35 @@ const BuyDialog = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  // Handle successful payment
+  const handlePaymentSuccess = (data: any) => {
+    console.log("Payment successful:", data);
+    
+    // Close dialog
+    setIsOpen(false);
+    
+    // Show success message
+    toast({
+      title: "Payment Successful",
+      description: `Your payment for ${metal} has been processed`,
+    });
+    
+    // Reset state
+    setPaymentSessionId(null);
+    setOrderId(null);
+  };
+  
+  // Handle payment failure
+  const handlePaymentFailure = (error: any) => {
+    console.error("Payment failed:", error);
+    
+    toast({
+      variant: "destructive",
+      title: "Payment Failed",
+      description: error.message || "Transaction could not be completed",
+    });
   };
   
   const updateCustomerInfo = (field: keyof CustomerInfo, value: string) => {
@@ -307,13 +340,25 @@ const BuyDialog = () => {
             </div>
           )}
           
-          <Button 
-            type="submit" 
-            className="w-full" 
-            disabled={isLoading}
-          >
-            {isLoading ? "Processing..." : "Proceed to Payment"}
-          </Button>
+          {paymentSessionId ? (
+            // Use the CashfreeCheckout component when we have a session ID
+            <CashfreeCheckout
+              paymentSessionId={paymentSessionId}
+              onPaymentSuccess={handlePaymentSuccess}
+              onPaymentFailure={handlePaymentFailure}
+              buttonText="Proceed to Payment"
+              className="w-full"
+            />
+          ) : (
+            // Show the regular button when we don't have a session ID yet
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={isLoading}
+            >
+              {isLoading ? "Processing..." : "Create Payment"}
+            </Button>
+          )}
         </form>
       </DialogContent>
     </Dialog>

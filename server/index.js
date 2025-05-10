@@ -92,7 +92,7 @@ app.post('/api/create-cashfree-order', async (req, res) => {
         customer_phone: customerDetails.customerPhone
       },
       order_meta: orderMeta || {
-        return_url: "https://your-secure-domain.com/api/payments/payment-success?order_id={order_id}"
+        return_url: "https://www.cashfree.com/devstudio/preview/pg/web/checkout?order_id={order_id}"
       }
     };
 

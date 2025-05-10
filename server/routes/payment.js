@@ -93,7 +93,7 @@ router.post('/create-order', async (req, res) => {
     // Cashfree will reject HTTP URLs in production
     
     // Use the frontendDomain if provided, otherwise fall back to a default
-    const domain = frontendDomain || 'https://your-secure-domain.com';
+    const domain = frontendDomain || 'https://aczenfnl.vercel.app/';
     
     // Ensure the domain is HTTPS
     const secureDomain = domain.startsWith('https://') ? domain : `https://${domain}`;
