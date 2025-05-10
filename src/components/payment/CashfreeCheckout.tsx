@@ -8,6 +8,10 @@ interface CashfreeCheckoutProps {
   buttonText?: string;
   className?: string;
   disabled?: boolean;
+  orderAmount?: number;
+  orderId?: string;
+  planType?: 'gold' | 'silver';
+  serverUrl?: string;
 }
 
 // Define Cashfree global type
@@ -21,7 +25,11 @@ const CashfreeCheckout = ({
   paymentSessionId,
   buttonText = "Pay Now",
   className = "",
-  disabled = false
+  disabled = false,
+  orderAmount = 0,
+  orderId = "",
+  planType = 'silver',
+  serverUrl = ""
 }: CashfreeCheckoutProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
@@ -67,12 +75,26 @@ const CashfreeCheckout = ({
     };
   }, [toast]);
 
+  // Get server URL from current location if not provided
+  const getServerUrl = () => {
+    if (serverUrl) return serverUrl;
+    
+    // For production, use a consistent server URL
+    if (process.env.NODE_ENV === 'production') {
+      return 'https://aczenfnl.onrender.com';
+    }
+    
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    return `${protocol}//${hostname}:5000`; // Assuming server runs on port 5000
+  };
+
   const doPayment = async () => {
-    if (!paymentSessionId) {
+    if (!paymentSessionId && (!orderAmount || !orderId)) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Missing payment session ID",
+        description: "Missing payment details",
       });
       return;
     }
@@ -89,6 +111,54 @@ const CashfreeCheckout = ({
     setIsLoading(true);
     
     try {
+      // Create order note with plan type
+      const orderNote = `Customer selected ${planType.toUpperCase()} plan`;
+      console.log("Order Note:", orderNote);
+      
+      // If we don't have a payment session ID yet, create an order first
+      if (!paymentSessionId && orderAmount && orderId) {
+        console.log("Creating order first...");
+        
+        // Create an order from your backend and get payment session ID
+        const apiUrl = `${getServerUrl()}/api/create-cashfree-order`;
+        
+        // Log the full request object for debugging
+        const requestObj = {
+          orderAmount: orderAmount,
+          orderId: orderId,
+          customerDetails: {
+            customerId: "customer_" + Date.now(),
+            customerName: "Customer",
+            customerEmail: "customer@example.com",
+            customerPhone: "9876543210"
+          },
+          orderNote: orderNote,
+          planType: planType
+        };
+        
+        console.log("Creating order with request:", requestObj);
+        
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestObj)
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to create order');
+        }
+        
+        const data = await response.json();
+        console.log('Order created successfully:', data);
+        
+        if (!data.payment_session_id) {
+          throw new Error('No payment session ID received from server');
+        }
+        
+        paymentSessionId = data.payment_session_id;
+      }
+      
       console.log("Starting payment with session:", paymentSessionId);
       
       // Initialize Cashfree with configuration
@@ -101,6 +171,7 @@ const CashfreeCheckout = ({
       let checkoutOptions = {
         paymentSessionId: paymentSessionId,
         redirectTarget: "_self",
+        orderNote: orderNote
       };
       
       console.log("Calling cashfree.checkout with options:", checkoutOptions);

@@ -63,15 +63,22 @@ app.use('/api/payments', paymentRoutes);
 // Add API endpoint matching exactly the Cashfree documentation example
 app.post('/api/create-cashfree-order', async (req, res) => {
   try {
-    console.log('Received order request:', req.body);
+    console.log('Received order request:', JSON.stringify(req.body, null, 2));
     
     // Extract request data
     const { 
       orderAmount, 
       orderId = `order_${Date.now()}`, 
       customerDetails,
-      orderMeta
+      orderMeta,
+      orderNote,
+      planType
     } = req.body;
+    
+    // Log the extracted values for debugging
+    console.log('Extracted values:');
+    console.log('- orderNote:', orderNote);
+    console.log('- planType:', planType);
     
     // Validate required fields
     if (!orderAmount || !customerDetails || !customerDetails.customerPhone) {
@@ -79,6 +86,12 @@ app.post('/api/create-cashfree-order', async (req, res) => {
         message: 'Missing required fields' 
       });
     }
+
+    // Create the order note based on plan type or use provided order note
+    const finalOrderNote = orderNote || 
+      (planType ? `Customer selected ${planType.toUpperCase()} plan` : 'Standard order');
+    
+    console.log('Using order note:', finalOrderNote);
 
     // Create the request payload exactly as in the Cashfree documentation
     const request = {
@@ -93,7 +106,8 @@ app.post('/api/create-cashfree-order', async (req, res) => {
       },
       order_meta: orderMeta || {
         return_url: "https://www.cashfree.com/devstudio/preview/pg/web/checkout?order_id={order_id}"
-      }
+      },
+      order_note: finalOrderNote
     };
 
     console.log('Creating order with Cashfree SDK:', JSON.stringify(request, null, 2));

@@ -59,7 +59,11 @@ export class PaymentService {
               customerName: details.customerName,
               customerEmail: details.customerEmail,
               customerPhone: details.customerPhone
-            }
+            },
+            // Add planType based on the metal selection
+            planType: details.metal,
+            // Add order note directly
+            orderNote: `Customer selected ${details.metal.toUpperCase()} plan`
           })
         });
         
