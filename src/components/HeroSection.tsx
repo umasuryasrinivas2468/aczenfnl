@@ -1,90 +1,92 @@
-import React, { useRef, useState } from 'react';
-import { Card, CardContent } from './ui/card';
-import { 
-  Building2, 
-  Plane, 
-  Train, 
-  Bus
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Button } from './ui/button';
 
 const HeroSection: React.FC = () => {
-  const sliderRef = useRef<HTMLDivElement>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
-  
+  const [currentSlide, setCurrentSlide] = useState(0);
+
   const slides = [
     {
-      title: '',
-      description: '',
-      icon: Building2,
-      color: 'bg-purple-500',
-      imageUrl: 'https://i.imgur.com/CTwpLo8.png'
+      imageUrl: 'https://cdn.grabon.in/gograbon/images/banners/banner-1746691998256/Offer%20Code.jpg',
+      link: 'https://www.grabon.in/'
     },
     {
-      title: 'Flights',
-      description: 'Explore the world with affordable flights',
-      icon: Plane,
-      color: 'bg-blue-500',
-      imageUrl: 'https://i.imgur.com/UHSHoI5.png'
+      imageUrl: 'https://cdn.grabon.in/gograbon/images/banners/banner-1746437011695/Bajaj%20Finserv%20Markets%20Offers.jpg',
+      link: 'https://www.bajajfinservmarkets.in/'
     },
     {
-      title: 'Trains',
-      description: 'Hassle-free train tickets at best prices',
-      icon: Train,
-      color: 'bg-green-500',
-      imageUrl: 'https://i.imgur.com/CTwpLo8.png'
+      imageUrl: 'https://i.pinimg.com/736x/e1/b2/c8/e1b2c832004912c7c5f11c3089604b27.jpg',
+      link: 'https://www.amazon.in/'
     },
     {
-      title: 'Bus',
-      description: 'Comfortable bus journeys across cities',
-      icon: Bus,
-      color: 'bg-orange-500',
-      imageUrl: 'https://i.imgur.com/UHSHoI5.png'
+      imageUrl: 'https://images-static.nykaa.com/uploads/5a8e0ecc-9e0c-4aa4-9fa7-df1700b2f3b5.jpg?tr=cm-pad_resize,w-600',
+      link: 'https://www.nykaa.com/'
     }
   ];
-  
+
+  const nextSlide = () => {
+    setCurrentSlide((prev) => (prev + 1) % slides.length);
+  };
+
+  const prevSlide = () => {
+    setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
+  };
+
+  useEffect(() => {
+    const interval = setInterval(nextSlide, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleImageClick = (link: string) => {
+    window.open(link, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <div className="relative">
-      <div 
-        ref={sliderRef}
-        className="flex overflow-x-auto scrollbar-hide snap-x snap-mandatory space-x-4 pb-4"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-      >
+      <div className="relative h-48 rounded-xl overflow-hidden">
         {slides.map((slide, index) => (
-          <Card 
-            key={index} 
-            className="flex-shrink-0 snap-center w-full rounded-xl border-none shadow-md overflow-hidden"
+          <div
+            key={index}
+            className={`absolute inset-0 transition-opacity duration-500 ${
+              index === currentSlide ? 'opacity-100' : 'opacity-0'
+            }`}
           >
-            <CardContent className="p-0">
-              <div className="flex flex-col h-full">
-                <div className={`${slide.color} p-6 text-white`}>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-xl font-semibold">{slide.title}</h3>
-                      <p className="text-sm opacity-80 mt-1">{slide.description}</p>
-                    </div>
-                    <slide.icon size={28} />
-                  </div>
-                </div>
-                <div className="p-4 bg-white">
-                  <img 
-                    src={slide.imageUrl} 
-                    alt={slide.title} 
-                    className="w-full h-32 object-contain"
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            <img
+              src={slide.imageUrl}
+              alt={`Slide ${index + 1}`}
+              className="w-full h-full object-cover cursor-pointer"
+              onClick={() => handleImageClick(slide.link)}
+            />
+          </div>
         ))}
       </div>
-      
-      <div className="flex justify-center space-x-1 mt-2">
+
+      <Button
+        variant="ghost"
+        size="icon"
+        className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full"
+        onClick={prevSlide}
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full"
+        onClick={nextSlide}
+      >
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex space-x-1">
         {slides.map((_, index) => (
-          <div 
+          <button
             key={index}
-            className={`h-1.5 rounded-full transition-all ${
-              index === activeIndex ? 'w-4 bg-purple-500' : 'w-1.5 bg-gray-300'
+            className={`w-2 h-2 rounded-full transition-colors ${
+              index === currentSlide ? 'bg-white' : 'bg-white/50'
             }`}
+            onClick={() => setCurrentSlide(index)}
           />
         ))}
       </div>

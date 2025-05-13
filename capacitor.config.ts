@@ -1,4 +1,3 @@
-
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
@@ -6,7 +5,8 @@ const config: CapacitorConfig = {
   appName: 'wealth-horizon-bloom',
   webDir: 'dist',
   server: {
-    url: 'https://d3e274db-dbf0-4510-b86b-54765d204ad4.lovableproject.com?forceHideBadge=true',
+    androidScheme: 'https',
+    url: 'http://192.168.1.8:8080', 
     cleartext: true
   },
   android: {

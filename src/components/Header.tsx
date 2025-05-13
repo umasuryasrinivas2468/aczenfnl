@@ -25,7 +25,7 @@ const Header: React.FC = () => {
           <Button 
             variant="ghost" 
             size="icon" 
-            onClick={() => navigate('/profile')}
+            onClick={() => navigate('/settings')}
             className="text-white hover:text-gray-300 hover:bg-gray-800 transition-colors"
             aria-label="Profile"
           >

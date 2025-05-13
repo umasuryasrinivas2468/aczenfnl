@@ -16,6 +16,8 @@ import Hotels from "./pages/Hotels";
 import Rewards from "./pages/Rewards";
 import Settings from "./pages/Settings";
 import PaymentSuccess from "./pages/PaymentSuccess";
+import Checkout from "./pages/Checkout";
+import PaymentStatus from "./pages/PaymentStatus";
 
 const queryClient = new QueryClient();
 
@@ -70,6 +72,8 @@ const App = () => {
               <Route path="/rewards" element={<ProtectedRoute><Rewards /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="/payment-success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
+              <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+              <Route path="/payment-status" element={<ProtectedRoute><PaymentStatus /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
