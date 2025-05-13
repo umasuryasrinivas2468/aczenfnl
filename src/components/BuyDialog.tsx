@@ -14,11 +14,25 @@ import { useToast } from "@/hooks/use-toast"
 import { Coins } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useLocalStorage } from "@/hooks/useLocalStorage"
+import { useUser } from "@clerk/clerk-react"
+import { createOrder } from "@/services/paymentService"
+
+// Define the type for window with Cashfree
+declare global {
+  interface Window {
+    Cashfree: any;
+  }
+}
 
 const BuyDialog = () => {
   const { toast } = useToast()
+  const { user } = useUser()
   const [amount, setAmount] = useState("")
   const [metal, setMetal] = useState("gold")
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
+  const [step, setStep] = useState(1) // 1: Metal & Amount, 2: Customer Details
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   
@@ -42,15 +56,23 @@ const BuyDialog = () => {
     transactions: []
   })
 
-  const handleBuy = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Pre-fill user information if available
+  React.useEffect(() => {
+    if (user) {
+      if (user.fullName) setName(user.fullName)
+      if (user.primaryEmailAddress) setEmail(user.primaryEmailAddress.emailAddress)
+      if (user.primaryPhoneNumber) setPhone(user.primaryPhoneNumber.phoneNumber)
+    }
+  }, [user])
+
+  const validateFirstStep = () => {
     if (!amount) {
       toast({
         variant: "destructive",
         title: "Error",
         description: "Please enter an amount",
       })
-      return
+      return false
     }
 
     const amountValue = parseFloat(amount)
@@ -60,20 +82,100 @@ const BuyDialog = () => {
         title: "Error",
         description: "Amount must be between ₹1 and ₹5000",
       })
+      return false
+    }
+
+    return true
+  }
+
+  const validateSecondStep = () => {
+    if (!name) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please enter your name",
+      })
+      return false
+    }
+
+    if (!email) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please enter your email",
+      })
+      return false
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please enter a valid email address",
+      })
+      return false
+    }
+
+    if (!phone) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please enter your phone number",
+      })
+      return false
+    }
+
+    // Basic phone validation (10 digits)
+    const phoneRegex = /^\d{10}$/
+    if (!phoneRegex.test(phone)) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please enter a valid 10-digit phone number",
+      })
+      return false
+    }
+
+    return true
+  }
+
+  const handleNextStep = () => {
+    if (validateFirstStep()) {
+      setStep(2)
+    }
+  }
+
+  const handleBuy = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!validateSecondStep()) {
       return
     }
 
     setIsLoading(true)
 
     try {
-      // Cashfree payment integration with TEST credentials
-      const orderId = `order_${Date.now()}`
-      const appId = "TEST10401621b07dc6fbcf2ab23955c912610401"
-      const secretKey = "cfsk_ma_test_e5544b1e437f252b39ad6b0144784582_c0cccdef"
+      const amountValue = parseFloat(amount)
+      const customerId = user?.id || "guest_user"
+      const orderNote = metal // Set order note as "gold" or "silver"
+      
+      // Create order using the payment service
+      const orderResponse = await createOrder(
+        amountValue, 
+        {
+          customerId: customerId,
+          customerPhone: phone,
+          customerName: name,
+          customerEmail: email
+        },
+        orderNote
+      )
       
       // Store transaction details in localStorage to retrieve after payment
       const transactionData = {
-        id: orderId,
+        id: orderResponse.order_id,
         type: metal,
         amount: amountValue,
         date: new Date().toISOString(),
@@ -82,51 +184,22 @@ const BuyDialog = () => {
       
       localStorage.setItem('pendingTransaction', JSON.stringify(transactionData))
       
-      // Direct Cashfree payment link for test mode
-      // Using the test payment URL for Cashfree
-      const cashfreeTestUrl = `https://test.cashfree.com/billpay/checkout/post/submit`
+      // Initialize Cashfree checkout
+      const cashfree = window.Cashfree({
+        mode: "production"
+      })
       
-      // Create form for the test environment
-      const form = document.createElement('form')
-      form.method = 'POST'
-      form.action = cashfreeTestUrl
-      
-      // Required parameters for Cashfree test mode
-      const params = {
-        appId: appId,
-        orderId: orderId,
-        orderAmount: amountValue.toString(),
-        orderCurrency: 'INR',
-        orderNote: `Purchase of ${metal}`,
-        customerName: 'Test User',
-        customerEmail: 'test@example.com',
-        customerPhone: '9999999999',
-        returnUrl: `${window.location.origin}/payment-success`,
-        notifyUrl: `${window.location.origin}/payment-success`,
+      const checkoutOptions = {
+        paymentSessionId: orderResponse.payment_session_id,
+        redirectTarget: "_self",
       }
       
-      // Create and append signature for Cashfree
-      const sortedParams = Object.keys(params).sort().reduce((acc, key) => {
-        acc[key] = params[key];
-        return acc;
-      }, {});
-      
-      // Add all parameters to the form
-      for (const key in params) {
-        const input = document.createElement('input')
-        input.type = 'hidden'
-        input.name = key
-        input.value = params[key]
-        form.appendChild(input)
-      }
-      
-      // Append form to body and submit
-      document.body.appendChild(form)
-      form.submit()
+      await cashfree.checkout(checkoutOptions)
       
       // Close dialog
       setIsOpen(false)
     } catch (error) {
+      console.error("Payment Error:", error)
       toast({
         variant: "destructive",
         title: "Payment Error",
@@ -137,8 +210,20 @@ const BuyDialog = () => {
     }
   }
 
+  const resetDialog = () => {
+    setStep(1)
+    setAmount("")
+    setMetal("gold")
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog 
+      open={isOpen} 
+      onOpenChange={(open) => {
+        setIsOpen(open)
+        if (!open) resetDialog()
+      }}
+    >
       <DialogTrigger asChild>
         <Button className="flex-1 h-14 bg-dark-blue hover:bg-dark-blue/90 text-white rounded-lg">
           <Coins className="mr-2" size={18} />
@@ -148,42 +233,103 @@ const BuyDialog = () => {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Buy Precious Metal</DialogTitle>
-          <DialogDescription>Select metal type and enter amount (₹1 - ₹5000)</DialogDescription>
+          <DialogDescription>
+            {step === 1 
+              ? "Select metal type and enter amount (₹1 - ₹5000)"
+              : "Please provide your contact information"
+            }
+          </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleBuy} className="space-y-4">
-          <div>
-            <Label>Select Metal</Label>
-            <RadioGroup
-              value={metal}
-              onValueChange={setMetal}
-              className="flex gap-4 mt-2"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="gold" id="gold" />
-                <Label htmlFor="gold">Gold</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="silver" id="silver" />
-                <Label htmlFor="silver">Silver</Label>
-              </div>
-            </RadioGroup>
-          </div>
-          <div>
-            <Label htmlFor="amount">Amount (₹)</Label>
-            <Input
-              id="amount"
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="Enter amount"
-              min="1"
-              max="5000"
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? "Processing..." : "Proceed to Payment"}
-          </Button>
-        </form>
+        
+        {step === 1 ? (
+          <form className="space-y-4">
+            <div>
+              <Label>Select Metal</Label>
+              <RadioGroup
+                value={metal}
+                onValueChange={setMetal}
+                className="flex gap-4 mt-2"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="gold" id="gold" />
+                  <Label htmlFor="gold">Gold</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="silver" id="silver" />
+                  <Label htmlFor="silver">Silver</Label>
+                </div>
+              </RadioGroup>
+            </div>
+            <div>
+              <Label htmlFor="amount">Amount (₹)</Label>
+              <Input
+                id="amount"
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="Enter amount"
+                min="1"
+                max="5000"
+              />
+            </div>
+            <Button type="button" className="w-full" onClick={handleNextStep}>
+              Next
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={handleBuy} className="space-y-4">
+            <div>
+              <Label htmlFor="name">Full Name</Label>
+              <Input
+                id="name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter your full name"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="phone">Phone Number</Label>
+              <Input
+                id="phone"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Enter your 10-digit phone number"
+                required
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="flex-1"
+                onClick={() => setStep(1)}
+              >
+                Back
+              </Button>
+              <Button 
+                type="submit" 
+                className="flex-1" 
+                disabled={isLoading}
+              >
+                {isLoading ? "Processing..." : "Proceed to Payment"}
+              </Button>
+            </div>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   )

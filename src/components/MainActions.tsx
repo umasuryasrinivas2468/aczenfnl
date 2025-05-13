@@ -2,7 +2,7 @@ import React from 'react';
 import BuyDialog from './BuyDialog';
 import OrderDialog from './OrderDialog';
 import { Button } from './ui/button';
-import { History, Award, CreditCard } from 'lucide-react';
+import { History, Award } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import HeroSection from './HeroSection';
 
@@ -35,15 +35,6 @@ const MainActions: React.FC = () => {
           Rewards
         </Button>
       </div>
-      
-      <Button 
-        variant="outline" 
-        className="w-full h-12 border-gray-700 text-white bg-green-900 hover:bg-green-800 rounded-lg"
-        onClick={() => navigate('/checkout')}
-      >
-        <CreditCard className="mr-2" size={16} />
-        Make Payment
-      </Button>
       
       <HeroSection />
     </div>

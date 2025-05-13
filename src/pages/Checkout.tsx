@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { createOrder } from '@/services/paymentService';
 import { useUser } from '@clerk/clerk-react';
 import { useNavigate } from 'react-router-dom';
@@ -7,6 +7,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+// Define the type for window with Cashfree
 declare global {
   interface Window {
     Cashfree: any;
@@ -16,25 +17,10 @@ declare global {
 const Checkout: React.FC = () => {
   const [amount, setAmount] = useState<number>(1);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [orderToken, setOrderToken] = useState<string>('');
+  const [paymentSessionId, setPaymentSessionId] = useState<string>('');
   const [orderId, setOrderId] = useState<string>('');
   const { user } = useUser();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    // Add script to document head
-    const script = document.createElement('script');
-    script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
-    script.async = true;
-    document.head.appendChild(script);
-
-    return () => {
-      // Cleanup script on component unmount
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
-      }
-    };
-  }, []);
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value);
@@ -48,12 +34,23 @@ const Checkout: React.FC = () => {
     try {
       const customerId = user.id;
       const customerPhone = user.primaryPhoneNumber?.toString() || "9999999999";
+      const customerName = user.fullName || "";
+      const customerEmail = user.primaryEmailAddress?.emailAddress || "";
       
-      const orderResponse = await createOrder(amount, customerId, customerPhone);
+      const orderResponse = await createOrder(
+        amount, 
+        {
+          customerId: customerId,
+          customerPhone: customerPhone,
+          customerName: customerName,
+          customerEmail: customerEmail
+        }
+      );
+      
       console.log("Order created:", orderResponse);
       
-      // Save the order token for checkout
-      setOrderToken(orderResponse.order_token);
+      // Save the payment session ID for checkout
+      setPaymentSessionId(orderResponse.payment_session_id);
       setOrderId(orderResponse.order_id);
     } catch (error) {
       console.error("Error creating order:", error);
@@ -62,35 +59,22 @@ const Checkout: React.FC = () => {
     }
   };
 
-  const handlePayment = () => {
-    if (!orderToken) return;
+  const doPayment = async () => {
+    if (!paymentSessionId) return;
     
     try {
-      const cashfree = new window.Cashfree({
-        mode: "production"
+      const cashfree = window.Cashfree({
+        mode: "production",
       });
       
-      cashfree.checkout({
-        orderToken: orderToken,
-        onSuccess: (data: any) => {
-          console.log("Payment success:", data);
-          navigate(`/payment-status?order_id=${orderId}&status=success`);
-        },
-        onFailure: (data: any) => {
-          console.log("Payment failure:", data);
-          navigate(`/payment-status?order_id=${orderId}&status=failure`);
-        },
-        onClose: () => {
-          console.log("Payment closed by user");
-        },
-        components: {
-          paymentInput: {
-            disableStyles: false,
-          }
-        }
-      });
+      const checkoutOptions = {
+        paymentSessionId: paymentSessionId,
+        redirectTarget: "_self",
+      };
+      
+      await cashfree.checkout(checkoutOptions);
     } catch (error) {
-      console.error("Checkout failed:", error);
+      console.error("Error initializing checkout:", error);
     }
   };
 
@@ -123,7 +107,7 @@ const Checkout: React.FC = () => {
             />
           </div>
 
-          {!orderToken ? (
+          {!paymentSessionId ? (
             <Button 
               className="w-full mt-4" 
               onClick={handleCreateOrder}
@@ -134,14 +118,14 @@ const Checkout: React.FC = () => {
           ) : (
             <Button 
               className="w-full mt-4 bg-green-600 hover:bg-green-700" 
-              onClick={handlePayment}
+              onClick={doPayment}
             >
               Pay Now
             </Button>
           )}
         </div>
 
-        {orderToken && (
+        {paymentSessionId && (
           <div className="bg-gray-900 rounded-lg p-4 animate-fade-in">
             <h2 className="text-lg font-semibold mb-2">Order Created Successfully</h2>
             <p className="text-sm text-gray-400 mb-2">Your order has been created. Click the Pay Now button to proceed with payment.</p>
