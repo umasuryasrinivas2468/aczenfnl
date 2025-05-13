@@ -184,6 +184,25 @@ const BuyDialog = () => {
       
       localStorage.setItem('pendingTransaction', JSON.stringify(transactionData))
       
+      // Check if this is a demo session
+      const isDemoSession = orderResponse.payment_session_id.startsWith('demo_session_');
+      
+      if (isDemoSession && process.env.NODE_ENV !== 'production') {
+        // For demo purposes, show a success message and close dialog
+        toast({
+          title: "Demo Payment",
+          description: "This is a demo payment flow. In production, this would open the Cashfree checkout.",
+        });
+        
+        setTimeout(() => {
+          // Simulate redirect to success page
+          window.location.href = '/payment-success';
+        }, 2000);
+        
+        setIsOpen(false);
+        return;
+      }
+      
       // Initialize Cashfree checkout
       const cashfree = window.Cashfree({
         mode: "production"
@@ -198,12 +217,30 @@ const BuyDialog = () => {
       
       // Close dialog
       setIsOpen(false)
-    } catch (error) {
+    } catch (error: any) {
       console.error("Payment Error:", error)
+      
+      // Show specific error messages based on the error
+      let errorMessage = "Failed to initiate payment. Please try again."
+      
+      // Check for network errors like CORS
+      if (error.message && error.message.includes('Network Error')) {
+        errorMessage = "Network error occurred. This might be due to CORS restrictions or API connectivity issues."
+      }
+      
+      // Check for API error responses
+      if (error.response && error.response.data) {
+        if (error.response.status === 405) {
+          errorMessage = "API method not allowed. Please check the API endpoint configuration."
+        } else if (error.response.data.message) {
+          errorMessage = `API Error: ${error.response.data.message}`
+        }
+      }
+      
       toast({
         variant: "destructive",
         title: "Payment Error",
-        description: "Failed to initiate payment. Please try again.",
+        description: errorMessage,
       })
     } finally {
       setIsLoading(false)
