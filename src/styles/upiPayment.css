@@ -1,0 +1,229 @@
+/* UPI Payment Components Styling */
+
+/* Main container for UPI payment */
+.upi-payment-container {
+  margin: 15px 0;
+  padding: 15px;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  border: 1px solid #e0e0e0;
+}
+
+/* UPI payment button */
+.upi-payment-button {
+  display: block;
+  width: 100%;
+  padding: 12px 15px;
+  background-color: #6a5acd; /* Purple shade typical for UPI payments */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.upi-payment-button:hover {
+  background-color: #5a4abf;
+}
+
+.upi-payment-button:disabled {
+  background-color: #a8a8a8;
+  cursor: not-allowed;
+}
+
+/* Status check button - for web testing */
+.upi-payment-check-button {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #f0f0f0;
+  color: #333;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.upi-payment-check-button:hover {
+  background-color: #e5e5e5;
+}
+
+.upi-payment-check-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Error message */
+.upi-payment-error {
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: #fff0f0;
+  border: 1px solid #ffcccb;
+  border-radius: 4px;
+  color: #d8000c;
+}
+
+/* Warning message for unsupported devices */
+.upi-payment-warning {
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: #fffacd;
+  border: 1px solid #ffef96;
+  border-radius: 4px;
+  color: #9a7d0a;
+}
+
+/* Payment status display */
+.upi-payment-status {
+  margin-top: 15px;
+  padding: 12px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.upi-payment-status p {
+  margin: 5px 0;
+}
+
+.upi-payment-status-success {
+  background-color: #e6ffe6;
+  border: 1px solid #b3ffb3;
+  color: #006400;
+}
+
+.upi-payment-status-failure {
+  background-color: #fff0f0;
+  border: 1px solid #ffcccb;
+  color: #d8000c;
+}
+
+.upi-payment-status-pending {
+  background-color: #f0f8ff;
+  border: 1px solid #b8e2f2;
+  color: #0077be;
+}
+
+.upi-payment-status-unknown {
+  background-color: #f5f5f5;
+  border: 1px solid #ddd;
+  color: #666;
+}
+
+/* UPI Payment Page Styling */
+.upi-payment-page {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.upi-payment-page h1 {
+  color: #333;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.order-details {
+  margin-bottom: 25px;
+  padding: 15px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.order-details h2 {
+  margin-top: 0;
+  color: #444;
+  font-size: 18px;
+}
+
+.payment-section {
+  margin-bottom: 25px;
+}
+
+.payment-section h2 {
+  margin-bottom: 15px;
+  color: #444;
+  font-size: 18px;
+}
+
+.payment-instructions {
+  margin-top: 30px;
+  padding: 15px;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+}
+
+.payment-instructions h3 {
+  margin-top: 0;
+  color: #444;
+  font-size: 16px;
+}
+
+.payment-instructions ol {
+  margin-left: 20px;
+  padding-left: 0;
+}
+
+.payment-instructions li {
+  margin-bottom: 8px;
+}
+
+.device-warning {
+  margin-bottom: 20px;
+  padding: 10px;
+  background-color: #fff9e6;
+  border: 1px solid #ffe0b2;
+  border-radius: 4px;
+  color: #b36b00;
+}
+
+.testing-tools {
+  margin: 25px 0;
+  padding: 15px;
+  background-color: #e6f7ff;
+  border: 1px solid #b3e0ff;
+  border-radius: 8px;
+}
+
+.testing-tools h3 {
+  margin-top: 0;
+  color: #0066cc;
+  font-size: 16px;
+}
+
+.test-upi-link-button {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 10px;
+  background-color: #0066cc;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.test-upi-link-button:hover {
+  background-color: #005cb3;
+}
+
+.test-upi-link-button:disabled {
+  background-color: #b3d1ff;
+  cursor: not-allowed;
+}
+
+/* For mobile devices */
+@media (max-width: 768px) {
+  .upi-payment-page {
+    padding: 15px;
+  }
+  
+  .upi-payment-button {
+    padding: 15px;
+    font-size: 18px;
+  }
+} 
