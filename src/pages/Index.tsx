@@ -66,6 +66,14 @@ const Index: React.FC = () => {
   // Get user investments from localStorage
   const [userInvestments, setUserInvestments] = useLocalStorage<UserInvestments>('userInvestments', defaultInvestments);
   
+  // State to track the total investment amount separately
+  const [totalInvestmentAmount, setTotalInvestmentAmount] = useState(userInvestments.totalInvestment);
+  
+  // Update total investment amount when userInvestments changes
+  useEffect(() => {
+    setTotalInvestmentAmount(userInvestments.totalInvestment);
+  }, [userInvestments.totalInvestment]);
+  
   // Update investment amounts when prices change
   useEffect(() => {
     if (!isLoading) {
@@ -98,12 +106,12 @@ const Index: React.FC = () => {
     const currentValue = goldValue + silverValue;
     
     // If no investments yet, return zeros
-    if (currentValue === 0 || userInvestments.totalInvestment === 0) {
+    if (currentValue === 0 || totalInvestmentAmount === 0) {
       return { currentValue: 0, gainAmount: 0, gainPercentage: 0 };
     }
     
-    const gainAmount = currentValue - userInvestments.totalInvestment;
-    const gainPercentage = (gainAmount / userInvestments.totalInvestment) * 100;
+    const gainAmount = currentValue - totalInvestmentAmount;
+    const gainPercentage = (gainAmount / totalInvestmentAmount) * 100;
     
     return {
       currentValue,
@@ -175,7 +183,7 @@ const Index: React.FC = () => {
         
         <div className="space-y-6 mt-2 pb-6">
           <InvestmentSummary 
-            totalAmount={userInvestments.totalInvestment} 
+            totalAmount={totalInvestmentAmount} 
             gainPercentage={gainPercentage} 
             gainAmount={gainAmount} 
           />

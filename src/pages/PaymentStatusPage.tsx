@@ -5,7 +5,7 @@ import { CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
-const PaymentStatus: React.FC = () => {
+const PaymentStatusPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
@@ -118,4 +118,4 @@ const PaymentStatus: React.FC = () => {
   );
 };
 
-export default PaymentStatus; 
+export default PaymentStatusPage; 

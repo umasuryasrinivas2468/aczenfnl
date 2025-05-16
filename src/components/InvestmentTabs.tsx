@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { ArrowUp } from 'lucide-react';
@@ -54,20 +53,20 @@ const InvestmentTabs: React.FC<InvestmentTabsProps> = ({ investments, chartData 
           value={type}
           className={`${activeTab === type ? 'animate-fade-in' : ''}`}
         >
-          <div className="bg-white rounded-lg p-4 shadow-sm mb-4">
+          <div className="bg-[#202938] rounded-lg p-4 shadow-sm mb-4">
             <div className="flex justify-between mb-4">
               <div>
-                <p className="text-sm text-gray-500 capitalize">{type} Investment</p>
-                <p className="text-xl font-bold text-dark-blue">
+                <p className="text-sm text-gray-300 capitalize">{type} Investment</p>
+                <p className="text-xl font-bold text-white">
                   ₹{investments[type as 'gold' | 'silver'].amount.toLocaleString()}
                 </p>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-300">
                   {investments[type as 'gold' | 'silver'].weight} {investments[type as 'gold' | 'silver'].weightUnit}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Market Price</p>
-                <p className="text-xl font-bold text-dark-blue">
+                <p className="text-sm text-gray-300">Market Price</p>
+                <p className="text-xl font-bold text-white">
                   ₹{investments[type as 'gold' | 'silver'].currentPrice.toLocaleString()}
                 </p>
                 <div className="flex items-center">

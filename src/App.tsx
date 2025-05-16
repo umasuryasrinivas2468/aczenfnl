@@ -18,6 +18,9 @@ import Settings from "./pages/Settings";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import Checkout from "./pages/Checkout";
 import PaymentStatus from "./pages/PaymentStatus";
+import Travel from "./pages/Travel";
+import WebView from "./pages/WebView";
+import UpiCheckout from "./pages/UpiCheckout";
 
 const queryClient = new QueryClient();
 
@@ -74,6 +77,12 @@ const App = () => {
               <Route path="/payment-success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
               <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
               <Route path="/payment-status" element={<ProtectedRoute><PaymentStatus /></ProtectedRoute>} />
+              <Route path="/upi-checkout" element={<ProtectedRoute><UpiCheckout /></ProtectedRoute>} />
+              
+              {/* New routes */}
+              <Route path="/travel" element={<ProtectedRoute><Travel /></ProtectedRoute>} />
+              <Route path="/webview" element={<ProtectedRoute><WebView /></ProtectedRoute>} />
+              
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

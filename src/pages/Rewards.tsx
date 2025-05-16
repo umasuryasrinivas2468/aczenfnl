@@ -15,7 +15,7 @@ const RewardsNew: React.FC = () => {
   const deals = [
     {
       id: 1,
-      badge: "Eat Club",
+      badge: "Eat Clubb",
       title: "Claim 20% off on Box8, Pasta & more",
       timeLeft: "5h",
       claimed: "4K",
@@ -64,12 +64,26 @@ const RewardsNew: React.FC = () => {
     window.open(url, '_blank');
   };
 
+  const handleBackNavigation = () => {
+    navigate(-1);
+  };
+
   return (
     <div className="max-w-md mx-auto bg-[#2a0a50] min-h-screen text-white">
       {currentPage === 'main' ? (
         <>
+          {/* Back button */}
+          <div className="p-4 flex items-center">
+            <button 
+              onClick={handleBackNavigation}
+              className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-900/50"
+            >
+              <ArrowLeft className="w-5 h-5 text-white" />
+            </button>
+          </div>
+          
           {/* Today's Deal Section */}
-          <div className="p-4 pt-6">
+          <div className="p-4">
             <div className="text-center mb-4">
               <h2 className="text-2xl font-bold text-pink-300 drop-shadow-lg">Today's Deal</h2>
               <p className="text-white text-xs mt-1">Claim and Earn</p>
