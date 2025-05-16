@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Smartphone, Globe } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser } from '@clerk/clerk-react';
 import { Button } from '@/components/ui/button';
@@ -68,6 +68,24 @@ const AmountInput: React.FC<AmountInputProps> = ({ amount, setAmount, metal, set
   );
 };
 
+// Detect if running in WebView on Android (including web-to-app conversions)
+const isAndroidWebView = (): boolean => {
+  if (typeof window !== 'undefined') {
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    return (
+      // Standard Android WebView checks
+      /wv/.test(userAgent) || 
+      // TWA (Trusted Web Activity) or PWA on Android
+      (/android/.test(userAgent) && /chrome/.test(userAgent) && 'standalone' in window.navigator) ||
+      // Additional checks for web-to-app converters
+      /android/.test(userAgent) && (/version\//.test(userAgent) || /samsungbrowser/.test(userAgent)) ||
+      // Check for Capacitor Android
+      (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android')
+    );
+  }
+  return false;
+};
+
 const UpiCheckout: React.FC = () => {
   const location = useLocation();
   const [amount, setAmount] = useState(0);
@@ -81,7 +99,7 @@ const UpiCheckout: React.FC = () => {
   const navigate = useNavigate();
 
   // Check if device supports UPI Intent
-  const isUpiSupported = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+  const isUpiSupported = isAndroidWebView();
   
   // Get the amount and metal from the location state if available
   useEffect(() => {
@@ -217,9 +235,25 @@ const UpiCheckout: React.FC = () => {
       </div>
 
       {!isUpiSupported && (
-        <div className="bg-red-900/50 rounded-lg p-4 mb-6">
-          <p className="text-red-200">
-            UPI Intent is only supported on Android devices. Please use another payment method.
+        <div className="bg-blue-900/30 rounded-lg p-4 mb-6">
+          <div className="flex items-center mb-2">
+            <Globe className="text-blue-300 mr-2" size={20} />
+            <p className="text-blue-200 font-medium">Web Payment</p>
+          </div>
+          <p className="text-blue-200 text-sm">
+            You're using the web version. You'll be redirected to a secure payment page where you can pay using UPI, cards, and more.
+          </p>
+        </div>
+      )}
+
+      {isUpiSupported && (
+        <div className="bg-green-900/30 rounded-lg p-4 mb-6">
+          <div className="flex items-center mb-2">
+            <Smartphone className="text-green-300 mr-2" size={20} />
+            <p className="text-green-200 font-medium">UPI App Payment</p>
+          </div>
+          <p className="text-green-200 text-sm">
+            Your device supports UPI direct payment. You'll be prompted to select your UPI app to complete the payment.
           </p>
         </div>
       )}

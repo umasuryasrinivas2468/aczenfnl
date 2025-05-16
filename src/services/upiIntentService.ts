@@ -19,6 +19,24 @@ const pendingTransactions: Record<string, {
   metadata: Record<string, any>;
 }> = {};
 
+// Detect if running in WebView on Android, including web-to-app conversions
+const isAndroidWebView = (): boolean => {
+  if (typeof window !== 'undefined') {
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    return (
+      // Standard Android WebView checks
+      /wv/.test(userAgent) || 
+      // TWA (Trusted Web Activity) or PWA on Android
+      (/android/.test(userAgent) && /chrome/.test(userAgent) && 'standalone' in window.navigator) ||
+      // Additional checks for web-to-app converters
+      /android/.test(userAgent) && (/version\//.test(userAgent) || /samsungbrowser/.test(userAgent)) ||
+      // Check for Capacitor Android
+      (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android')
+    );
+  }
+  return false;
+};
+
 // Generates a unique order ID for UPI transactions that includes user ID and metal type
 export const generateOrderId = (userId: string, metalType: string): string => {
   return `user_${userId}_${metalType}_${Date.now()}`;
@@ -41,13 +59,8 @@ interface UpiPaymentParams {
  * Initiates a UPI Intent payment that will open UPI apps on the device
  */
 export const initiateUpiIntentPayment = async (params: UpiPaymentParams): Promise<void> => {
-  // Check if running on Android
-  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') {
-    throw new Error('UPI Intent is only supported on Android devices');
-  }
-
+  // Create order in Cashfree first, regardless of platform
   try {
-    // First create order in Cashfree for tracking
     await createCashfreeOrder({
       orderId: params.orderId,
       amount: params.amount,
@@ -58,7 +71,7 @@ export const initiateUpiIntentPayment = async (params: UpiPaymentParams): Promis
       metalType: params.metalType
     });
 
-    // Track the transaction in memory for demo (instead of Supabase)
+    // Track the transaction in memory for demo
     pendingTransactions[params.orderId] = {
       orderId: params.orderId,
       amount: params.amount,
@@ -75,7 +88,7 @@ export const initiateUpiIntentPayment = async (params: UpiPaymentParams): Promis
       }
     };
 
-    // Also record in Supabase if available (this is optional)
+    // Also record in Supabase if available
     try {
       await recordTransaction({
         order_id: params.orderId,
@@ -96,27 +109,57 @@ export const initiateUpiIntentPayment = async (params: UpiPaymentParams): Promis
       });
     } catch (error) {
       console.error('Failed to record transaction in Supabase:', error);
-      // Continue with the flow, as we're using in-memory storage for demo
     }
 
-    // Prepare the UPI URL with all payment parameters
-    const upiUrl = generateUpiIntentUrl({
-      vpa: params.vpa,
-      amount: params.amount,
-      payeeName: 'Aczen Technologies',
-      transactionId: params.orderId,
-      transactionRef: params.orderId,
-      description: params.description || `Payment of ₹${params.amount}`,
-      merchantCode: 'ACZEN',
-    });
+    // Check if running on Android WebView (including converted web-to-app)
+    const isAndroid = isAndroidWebView();
 
-    // Open the UPI URL which will prompt the user to select a UPI app
-    window.location.href = upiUrl;
+    if (isAndroid) {
+      // Use UPI Intent URL for Android devices
+      const upiUrl = generateUpiIntentUrl({
+        vpa: params.vpa,
+        amount: params.amount,
+        payeeName: 'Aczen Technologies',
+        transactionId: params.orderId,
+        transactionRef: params.orderId,
+        description: params.description || `Payment of ₹${params.amount}`,
+        merchantCode: 'ACZEN',
+      });
+      window.location.href = upiUrl;
+    } else {
+      // For web, redirect to Cashfree payment page 
+      const paymentLink = await createCashfreePaymentLink(params.orderId);
+      if (paymentLink) {
+        window.location.href = paymentLink;
+      } else {
+        throw new Error('Failed to create payment link');
+      }
+    }
 
     return;
   } catch (error) {
     console.error('Failed to initiate UPI payment:', error);
     throw error;
+  }
+};
+
+/**
+ * Creates a Cashfree payment link that works for both web and mobile
+ */
+const createCashfreePaymentLink = async (orderId: string): Promise<string | null> => {
+  try {
+    const response = await axios.get(`https://api.cashfree.com/pg/orders/${orderId}/payment-link`, {
+      headers: {
+        'x-api-version': '2022-09-01',
+        'x-client-id': API_KEY,
+        'x-client-secret': API_SECRET
+      }
+    });
+    
+    return response.data.payment_link;
+  } catch (error) {
+    console.error('Failed to create payment link:', error);
+    return null;
   }
 };
 
@@ -133,8 +176,12 @@ export const createCashfreeOrder = async (params: {
   metalType: string;
 }): Promise<any> => {
   try {
-    // Get the webhook URL - use environment variable or default to localhost in development
-    const webhookUrl = process.env.NEXT_PUBLIC_WEBHOOK_URL || `${window.location.origin}/api/webhooks/cashfree`;
+    // Get the app base URL - using Vercel's deployment URL or fallback to origin
+    const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+    
+    // Construct webhook URL with the app domain
+    const webhookUrl = `${appBaseUrl}/api/webhooks/cashfree`;
+    const returnUrl = `${appBaseUrl}/payment-success?order_id={order_id}`;
     
     const payload = {
       "order_id": params.orderId,
@@ -147,10 +194,15 @@ export const createCashfreeOrder = async (params: {
         "customer_phone": params.customerPhone
       },
       "order_meta": {
-        "return_url": `${window.location.origin}/payment-success?order_id={order_id}`,
+        "return_url": returnUrl,
         "notify_url": webhookUrl,
         "user_id": params.userId,
         "metal_type": params.metalType
+      },
+      "order_note": `Payment for ${params.metalType} worth ₹${params.amount}`,
+      "order_tags": {
+        "metal_type": params.metalType,
+        "user_id": params.userId
       }
     };
     
