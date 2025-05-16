@@ -23,15 +23,29 @@ const pendingTransactions: Record<string, {
 const isAndroidWebView = (): boolean => {
   if (typeof window !== 'undefined') {
     const userAgent = window.navigator.userAgent.toLowerCase();
+    
+    // Log user agent for debugging
+    console.log('User Agent:', userAgent);
+    
+    // More comprehensive detection for Android devices and webviews
     return (
+      // Very broad Android detection
+      /android/i.test(userAgent) ||
+      
       // Standard Android WebView checks
       /wv/.test(userAgent) || 
+      
       // TWA (Trusted Web Activity) or PWA on Android
       (/android/.test(userAgent) && /chrome/.test(userAgent) && 'standalone' in window.navigator) ||
+      
       // Additional checks for web-to-app converters
-      /android/.test(userAgent) && (/version\//.test(userAgent) || /samsungbrowser/.test(userAgent)) ||
+      (/android/.test(userAgent) && (/version\//.test(userAgent) || /samsungbrowser/.test(userAgent) || /webview/.test(userAgent))) ||
+      
       // Check for Capacitor Android
-      (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android')
+      (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') ||
+      
+      // Force UPI Intent for testing (remove in production)
+      (window.localStorage.getItem('force_upi_intent') === 'true')
     );
   }
   return false;

@@ -5,6 +5,7 @@ import { useUser } from '@clerk/clerk-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { 
   initiateUpiIntentPayment, 
   generateOrderId, 
@@ -13,6 +14,7 @@ import {
 import { Capacitor } from '@capacitor/core';
 import { toast } from 'sonner';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import UpiDeepLink from '@/components/UpiDeepLink';
 
 type AmountInputProps = {
   amount: number;
@@ -95,8 +97,18 @@ const UpiCheckout: React.FC = () => {
   const [orderId, setOrderId] = useState('');
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'pending' | 'success' | 'failed'>('idle');
   const [pollingCount, setPollingCount] = useState(0);
+  const [forceUpiIntent, setForceUpiIntent] = useState(false);
   const { user } = useUser();
   const navigate = useNavigate();
+
+  // Toggle force UPI intent option
+  useEffect(() => {
+    if (forceUpiIntent) {
+      localStorage.setItem('force_upi_intent', 'true');
+    } else {
+      localStorage.removeItem('force_upi_intent');
+    }
+  }, [forceUpiIntent]);
 
   // Check if device supports UPI Intent
   const isUpiSupported = isAndroidWebView();
@@ -234,7 +246,27 @@ const UpiCheckout: React.FC = () => {
         <h1 className="text-xl font-bold">UPI Payment</h1>
       </div>
 
-      {!isUpiSupported && (
+      {/* Add developer options */}
+      <div className="mb-4 bg-gray-900 rounded-lg p-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-400">Developer options:</span>
+          <div className="flex items-center space-x-2">
+            <Switch 
+              id="force-upi" 
+              checked={forceUpiIntent}
+              onCheckedChange={setForceUpiIntent}
+            />
+            <Label htmlFor="force-upi" className="text-xs">Force UPI Intent</Label>
+          </div>
+        </div>
+        {forceUpiIntent && (
+          <p className="text-xs text-amber-500 mt-2">
+            UPI Intent mode forced. This will attempt to open UPI apps directly.
+          </p>
+        )}
+      </div>
+
+      {!isUpiSupported && !forceUpiIntent && (
         <div className="bg-blue-900/30 rounded-lg p-4 mb-6">
           <div className="flex items-center mb-2">
             <Globe className="text-blue-300 mr-2" size={20} />
@@ -246,7 +278,7 @@ const UpiCheckout: React.FC = () => {
         </div>
       )}
 
-      {isUpiSupported && (
+      {(isUpiSupported || forceUpiIntent) && (
         <div className="bg-green-900/30 rounded-lg p-4 mb-6">
           <div className="flex items-center mb-2">
             <Smartphone className="text-green-300 mr-2" size={20} />
@@ -259,13 +291,30 @@ const UpiCheckout: React.FC = () => {
       )}
 
       {showAmountInput ? (
-        <AmountInput 
-          amount={amount} 
-          setAmount={setAmount}
-          metal={metal}
-          setMetal={setMetal}
-          onProceed={handleProceed} 
-        />
+        <div>
+          <AmountInput 
+            amount={amount} 
+            setAmount={setAmount}
+            metal={metal}
+            setMetal={setMetal}
+            onProceed={handleProceed} 
+          />
+          
+          {/* Add direct UPI deeplink for Android devices */}
+          {(isUpiSupported || forceUpiIntent) && amount > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-800">
+              <p className="text-sm text-gray-300 mb-3">
+                Having trouble with UPI payment? Try direct UPI link:
+              </p>
+              <UpiDeepLink 
+                vpa="aczentechnologiesp.cf@axisbank"
+                amount={amount}
+                description={`Payment for ${metal} worth ₹${amount}`}
+                name="Aczen Technologies"
+              />
+            </div>
+          )}
+        </div>
       ) : (
         <div className="bg-gray-900 rounded-lg p-6 animate-in fade-in duration-300">
           {isLoading ? (
