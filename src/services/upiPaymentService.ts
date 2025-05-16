@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import axios from 'axios';
+import { App } from '@capacitor/app';
 
 // UPI Payment interface
 export interface UpiPaymentParams {
@@ -29,14 +30,126 @@ export interface PaymentStatus {
 export class UpiPaymentService {
   private static instance: UpiPaymentService;
   private backendUrl: string = process.env.REACT_APP_BACKEND_URL || '/api';
+  private appReturnListener: any = null;
+  private statusPollingInterval: any = null;
   
-  private constructor() {}
+  private constructor() {
+    // Setup app return listener for Capacitor
+    if (Capacitor.isNativePlatform()) {
+      this.setupAppStateListener();
+    }
+  }
   
   public static getInstance(): UpiPaymentService {
     if (!UpiPaymentService.instance) {
       UpiPaymentService.instance = new UpiPaymentService();
     }
     return UpiPaymentService.instance;
+  }
+  
+  /**
+   * Setup listener for app state changes (for Capacitor)
+   */
+  private setupAppStateListener() {
+    try {
+      // Remove existing listener if any
+      if (this.appReturnListener) {
+        this.appReturnListener.remove();
+      }
+      
+      // Add new listener
+      this.appReturnListener = App.addListener('appStateChange', ({ isActive }) => {
+        if (isActive) {
+          // App has come back to foreground, check pending transactions
+          this.checkPendingTransactionOnResume();
+        }
+      });
+      
+      console.log('App state listener set up for UPI payments');
+    } catch (error) {
+      console.error('Error setting up app state listener:', error);
+    }
+  }
+  
+  /**
+   * Check pending transactions when app resumes
+   */
+  private async checkPendingTransactionOnResume() {
+    const pendingTxnId = localStorage.getItem('pending_txn_id');
+    const startTime = localStorage.getItem('upi_payment_start_time');
+    
+    if (pendingTxnId && startTime) {
+      console.log('App resumed, checking pending UPI transaction:', pendingTxnId);
+      
+      // Clear any existing polling interval
+      if (this.statusPollingInterval) {
+        clearInterval(this.statusPollingInterval);
+      }
+      
+      // Start aggressive polling for status updates
+      this.startStatusPolling(pendingTxnId);
+      
+      // Trigger a custom event that components can listen for
+      const event = new CustomEvent('upi_app_returned', { 
+        detail: { transactionId: pendingTxnId } 
+      });
+      document.dispatchEvent(event);
+    }
+  }
+  
+  /**
+   * Start polling for payment status at short intervals
+   */
+  public startStatusPolling(transactionId: string, maxAttempts = 15, intervalMs = 2000) {
+    let attempts = 0;
+    
+    // Clear any existing polling interval
+    if (this.statusPollingInterval) {
+      clearInterval(this.statusPollingInterval);
+    }
+    
+    console.log(`Starting UPI status polling for transaction ${transactionId}`);
+    
+    this.statusPollingInterval = setInterval(async () => {
+      try {
+        attempts++;
+        console.log(`Polling attempt ${attempts} for transaction ${transactionId}`);
+        
+        const status = await this.checkPaymentStatus(transactionId);
+        
+        // If status is resolved or max attempts reached, stop polling
+        if (status.status === 'success' || status.status === 'failure' || attempts >= maxAttempts) {
+          clearInterval(this.statusPollingInterval);
+          this.statusPollingInterval = null;
+          
+          // Trigger an event with the final status
+          const event = new CustomEvent('upi_status_updated', { 
+            detail: { status, finalUpdate: true } 
+          });
+          document.dispatchEvent(event);
+          
+          // If transaction is complete, clean up
+          if (status.status === 'success' || status.status === 'failure') {
+            localStorage.removeItem('pending_txn_id');
+            localStorage.removeItem('upi_payment_start_time');
+          }
+        } else {
+          // Trigger event for status update (not final)
+          const event = new CustomEvent('upi_status_updated', { 
+            detail: { status, finalUpdate: false } 
+          });
+          document.dispatchEvent(event);
+        }
+      } catch (error) {
+        console.error('Error in payment status polling:', error);
+        
+        // If too many errors, stop polling
+        if (attempts >= maxAttempts) {
+          clearInterval(this.statusPollingInterval);
+          this.statusPollingInterval = null;
+        }
+      }
+    }, intervalMs);
   }
   
   /**
@@ -99,7 +212,13 @@ export class UpiPaymentService {
         payeeAddress: params.pa,
         payeeName: params.pn,
         description: params.tn || 'Payment',
-        status: 'initiated'
+        status: 'initiated',
+        platform: Capacitor.isNativePlatform() ? Capacitor.getPlatform() : 'web',
+        deviceInfo: {
+          isNative: Capacitor.isNativePlatform(),
+          platform: Capacitor.getPlatform(),
+          userAgent: navigator.userAgent
+        }
       });
       
       // Generate deep link URL
@@ -126,9 +245,33 @@ export class UpiPaymentService {
     // Record start time before redirection (for polling)
     localStorage.setItem('upi_payment_start_time', Date.now().toString());
     
+    // For Capacitor, we need to handle the return differently
+    if (Capacitor.isNativePlatform()) {
+      console.log('Opening UPI URL in Capacitor native app:', upiUrl);
+      
+      // Make sure app state listener is set up
+      this.setupAppStateListener();
+    }
+    
     // Redirect to UPI URL
     window.location.href = upiUrl;
     return true;
+  }
+  
+  /**
+   * Directly update payment status to database (for testing)
+   */
+  public async updatePaymentStatus(transactionId: string, newStatus: string): Promise<PaymentStatus> {
+    try {
+      const response = await axios.post(`${this.backendUrl}/payments/update-status`, {
+        transactionId,
+        status: newStatus
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to update payment status:', error);
+      throw error;
+    }
   }
   
   /**
@@ -136,7 +279,9 @@ export class UpiPaymentService {
    */
   public async checkPaymentStatus(transactionId: string): Promise<PaymentStatus> {
     try {
+      console.log(`Checking payment status for transaction: ${transactionId}`);
       const response = await axios.get(`${this.backendUrl}/payments/status/${transactionId}`);
+      console.log('Payment status response:', response.data);
       return response.data;
     } catch (error) {
       console.error('Failed to check payment status:', error);
@@ -194,5 +339,20 @@ export class UpiPaymentService {
    */
   public generateTransactionId(): string {
     return `TXN_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+  }
+  
+  /**
+   * Cleanup resources when no longer needed
+   */
+  public cleanup() {
+    if (this.appReturnListener) {
+      this.appReturnListener.remove();
+      this.appReturnListener = null;
+    }
+    
+    if (this.statusPollingInterval) {
+      clearInterval(this.statusPollingInterval);
+      this.statusPollingInterval = null;
+    }
   }
 } 

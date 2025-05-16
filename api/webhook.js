@@ -9,6 +9,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  console.log('Received webhook:', JSON.stringify(req.body, null, 2));
+
   try {
     // Get webhook data from request body
     const { 
@@ -23,6 +25,7 @@ export default async function handler(req, res) {
 
     // Validate required fields
     if (!txnId || !status) {
+      console.error('Missing required parameters in webhook:', { txnId, status });
       return res.status(400).json({ error: 'Missing required webhook parameters' });
     }
 
@@ -45,6 +48,8 @@ export default async function handler(req, res) {
       internalStatus = 'failure';
     }
     
+    console.log(`Updating payment status for ${txnId}: ${status} -> ${internalStatus}`);
+    
     // Update payment status in database
     await db.collection('payments').updateOne(
       { transactionId: txnId },
@@ -55,21 +60,41 @@ export default async function handler(req, res) {
           responseCode,
           approvalRefNo,
           updatedAt: new Date(),
-          message: status === 'SUCCESS' ? 'Payment successful' : `Payment ${status.toLowerCase()}`
+          message: status === 'SUCCESS' ? 'Payment successful' : `Payment ${status.toLowerCase()}`,
+          // Store full webhook payload for debugging
+          webhookData: req.body,
+          // Store a log of status changes
+          statusLogs: [
+            ...(payment.statusLogs || []),
+            {
+              status: internalStatus,
+              providerStatus: status,
+              timestamp: new Date(),
+              responseCode
+            }
+          ]
         } 
       }
     );
+    
+    // For Capacitor/mobile apps, we might want to notify the app
+    // This would typically be done through a push notification service
+    // or through polling from the app side
     
     // Log the webhook data for debugging
     console.log('Payment webhook processed:', {
       txnId,
       status,
       internalStatus,
-      amount
+      amount,
+      timestamp: new Date().toISOString()
     });
     
     // Send successful response
-    res.status(200).json({ success: true });
+    res.status(200).json({ 
+      success: true,
+      message: `Status updated to ${internalStatus}`
+    });
   } catch (error) {
     console.error('Error processing payment webhook:', error);
     
