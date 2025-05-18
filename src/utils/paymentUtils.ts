@@ -6,6 +6,7 @@ export interface PaymentResult {
   paymentId?: string;
   paymentMethod?: string;
   amount?: number;
+  errorMessage?: string;
 }
 
 /**
@@ -15,11 +16,14 @@ export interface PaymentResult {
 export const processPaymentCallback = async (queryParams: URLSearchParams): Promise<PaymentResult> => {
   const orderId = queryParams.get('order_id');
   const status = queryParams.get('status');
+  const paymentId = queryParams.get('payment_id');
+  const errorMessage = queryParams.get('error_message') || queryParams.get('message');
   
   if (!orderId) {
     return {
       orderId: 'unknown',
-      status: 'failure'
+      status: 'failure',
+      errorMessage: 'No order ID provided'
     };
   }
 
@@ -50,9 +54,10 @@ export const processPaymentCallback = async (queryParams: URLSearchParams): Prom
     return {
       orderId,
       status: mappedStatus,
-      paymentId: paymentDetails.cfPaymentId || paymentDetails.payment_id,
+      paymentId: paymentDetails.cfPaymentId || paymentDetails.payment_id || paymentId,
       paymentMethod: paymentDetails.paymentMethod || 'upi',
-      amount: paymentDetails.amount
+      amount: paymentDetails.amount,
+      errorMessage: mappedStatus === 'failure' ? (paymentDetails.errorMessage || errorMessage || 'Payment failed') : undefined
     };
   } catch (error) {
     console.error('Error verifying payment:', error);
@@ -61,13 +66,16 @@ export const processPaymentCallback = async (queryParams: URLSearchParams): Prom
     if (status) {
       return {
         orderId,
-        status: status.toLowerCase() === 'success' ? 'success' : 'failure'
+        status: status.toLowerCase() === 'success' ? 'success' : 'failure',
+        paymentId: paymentId,
+        errorMessage: status.toLowerCase() !== 'success' ? (errorMessage || 'Payment verification failed') : undefined
       };
     }
     
     return {
       orderId,
-      status: 'pending'
+      status: 'pending',
+      paymentId: paymentId
     };
   }
 };
@@ -80,50 +88,105 @@ export const updateLocalTransactionStatus = (paymentResult: PaymentResult): bool
     // Check for pending transaction in localStorage
     const pendingTransactionJson = localStorage.getItem('pendingTransaction');
     
-    if (pendingTransactionJson) {
-      const pendingTransaction = JSON.parse(pendingTransactionJson);
+    if (!pendingTransactionJson) {
+      console.log('No pending transaction found in localStorage');
+      return false;
+    }
+    
+    const pendingTransaction = JSON.parse(pendingTransactionJson);
+    
+    // If empty or invalid data, return false
+    if (!pendingTransaction || typeof pendingTransaction !== 'object') {
+      console.log('Invalid pending transaction data');
+      return false;
+    }
+    
+    // Handle both single transaction and array of transactions
+    const isArray = Array.isArray(pendingTransaction);
+    const transactions = isArray ? pendingTransaction : [pendingTransaction];
+    
+    // Find the transaction that matches this order ID
+    const matchingTxIndex = transactions.findIndex(
+      tx => tx.id === paymentResult.orderId || tx.orderId === paymentResult.orderId
+    );
+    
+    if (matchingTxIndex === -1) {
+      console.log('No matching transaction found');
+      return false;
+    }
+    
+    // Get the transaction and update its status
+    const transaction = transactions[matchingTxIndex];
+    transaction.status = paymentResult.status === 'success' ? 'completed' : 
+                         paymentResult.status === 'failure' ? 'failed' : 'pending';
+    transaction.paymentId = paymentResult.paymentId || transaction.paymentId;
+    
+    // Get existing investments
+    const userInvestmentsJson = localStorage.getItem('userInvestments');
+    
+    if (!userInvestmentsJson) {
+      console.log('No userInvestments found in localStorage');
+      return false;
+    }
+    
+    const userInvestments = JSON.parse(userInvestmentsJson);
+    
+    // Only update investments if payment was successful
+    if (paymentResult.status === 'success') {
+      // Update total investment
+      userInvestments.totalInvestment += transaction.amount;
       
-      // Verify this is for the same order
-      if (pendingTransaction.id === paymentResult.orderId) {
-        // Update transaction status
-        pendingTransaction.status = paymentResult.status === 'success' ? 'completed' : 'failed';
+      // Update specific metal investment
+      const metal = transaction.type; // 'gold' or 'silver'
+      if (metal === 'gold' || metal === 'silver') {
+        userInvestments.investments[metal].amount += transaction.amount;
         
-        // Get existing investments
-        const userInvestmentsJson = localStorage.getItem('userInvestments');
-        
-        if (userInvestmentsJson) {
-          const userInvestments = JSON.parse(userInvestmentsJson);
-          
-          // Only update investments if payment was successful
-          if (paymentResult.status === 'success') {
-            // Update total investment
-            userInvestments.totalInvestment += pendingTransaction.amount;
-            
-            // Update specific metal investment
-            const metal = pendingTransaction.type; // 'gold' or 'silver'
-            userInvestments.investments[metal].amount += pendingTransaction.amount;
-            
-            // Calculate metal weight based on approximate rate
-            const metalPrice = metal === 'gold' ? 5500 : 70; // Sample rates per gram
-            const weightInGrams = pendingTransaction.amount / metalPrice;
-            userInvestments.investments[metal].weight += weightInGrams;
-          }
-          
-          // Add transaction to history regardless of status
-          userInvestments.transactions.push(pendingTransaction);
-          
-          // Save updated investments
-          localStorage.setItem('userInvestments', JSON.stringify(userInvestments));
-          
-          // Remove pending transaction
-          localStorage.removeItem('pendingTransaction');
-          
-          return true;
-        }
+        // Calculate metal weight based on approximate rate
+        const metalPrice = metal === 'gold' ? 5500 : 70; // Sample rates per gram
+        const weightInGrams = transaction.amount / metalPrice;
+        userInvestments.investments[metal].weight += weightInGrams;
+      } else {
+        console.warn(`Invalid metal type: ${metal}, defaulting to gold`);
+        userInvestments.investments.gold.amount += transaction.amount;
+        const weightInGrams = transaction.amount / 5500;
+        userInvestments.investments.gold.weight += weightInGrams;
       }
     }
     
-    return false;
+    // Add transaction to history regardless of status
+    // Check if it's already in the transactions array
+    const existingTxIndex = userInvestments.transactions.findIndex(
+      (tx: any) => tx.id === transaction.id || tx.orderId === transaction.orderId
+    );
+    
+    if (existingTxIndex === -1) {
+      // Add to beginning of array
+      userInvestments.transactions.unshift(transaction);
+    } else {
+      // Update existing transaction
+      userInvestments.transactions[existingTxIndex] = transaction;
+    }
+    
+    // Save updated investments
+    localStorage.setItem('userInvestments', JSON.stringify(userInvestments));
+    
+    // Remove matching transaction from pendingTransaction
+    if (isArray) {
+      const updatedTransactions = transactions.filter((_, i) => i !== matchingTxIndex);
+      
+      if (updatedTransactions.length === 0) {
+        localStorage.removeItem('pendingTransaction');
+      } else if (updatedTransactions.length === 1) {
+        localStorage.setItem('pendingTransaction', JSON.stringify(updatedTransactions[0]));
+      } else {
+        localStorage.setItem('pendingTransaction', JSON.stringify(updatedTransactions));
+      }
+    } else {
+      // If it was a single transaction, simply remove it
+      localStorage.removeItem('pendingTransaction');
+    }
+    
+    return true;
   } catch (error) {
     console.error('Error updating transaction status:', error);
     return false;

@@ -2,16 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RefreshCw } from "lucide-react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { getTransactionDetails, TransactionDetails } from '@/services/paymentService';
+import TransactionHistory from '@/components/TransactionHistory';
+import { useUser } from '@clerk/clerk-react';
 
 interface Transaction {
   id: string;
@@ -51,6 +45,7 @@ const defaultInvestments: UserInvestments = {
 
 const History = () => {
   const navigate = useNavigate();
+  const { isSignedIn } = useUser();
   const [userInvestments, setUserInvestments] = useLocalStorage<UserInvestments>('userInvestments', defaultInvestments);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -200,121 +195,59 @@ const History = () => {
             };
           }
 
+          // See if it already has payment details (was looked up previously)
+          if (transaction.paymentDetails) {
+            // Skip refresh lookup unless forced
+            if (!forceRefresh) {
+              return transaction;
+            }
+          }
+
           try {
             const paymentDetails = await getTransactionDetails(transaction.orderId);
-            
-            // If any payment that was previously pending is now successful or failed,
-            // update the local storage data as well
-            if (transaction.status === 'pending' && 
-                paymentDetails && 
-                (paymentDetails.status === 'SUCCESS' || paymentDetails.status === 'FAILURE')) {
-              // Mark for update in local storage
-              transaction.status = paymentDetails.status === 'SUCCESS' ? 'completed' : 'failed';
-              
-              // If this was a pendingTransaction that's now complete, try to move it to userInvestments
-              if (pendingTransactions.some(pt => pt.id === transaction.id || pt.orderId === transaction.orderId)) {
-                const pendingTxJson = localStorage.getItem('pendingTransaction');
-                if (pendingTxJson) {
-                  try {
-                    const pendingTx = JSON.parse(pendingTxJson);
-                    
-                    // If it's a single transaction that matches
-                    if (!Array.isArray(pendingTx) && 
-                        (pendingTx.id === transaction.id || pendingTx.orderId === transaction.orderId)) {
-                      localStorage.removeItem('pendingTransaction');
-                    } 
-                    // If it's an array, remove the matching transaction
-                    else if (Array.isArray(pendingTx)) {
-                      const updatedPendingTx = pendingTx.filter(pt => 
-                        pt.id !== transaction.id && pt.orderId !== transaction.orderId
-                      );
-                      
-                      if (updatedPendingTx.length === 0) {
-                        localStorage.removeItem('pendingTransaction');
-                      } else {
-                        localStorage.setItem('pendingTransaction', JSON.stringify(updatedPendingTx));
-                      }
-                    }
-                    
-                    // Add to userInvestments if not already there
-                    if (!userInvestments.transactions.some(t => 
-                      t.id === transaction.id || t.orderId === transaction.orderId
-                    )) {
-                      setUserInvestments({
-                        ...userInvestments,
-                        transactions: [...userInvestments.transactions, transaction]
-                      });
-                    }
-                  } catch (e) {
-                    console.error('Error updating pendingTransaction:', e);
-                  }
-                }
-              }
-            }
-            
             return {
               ...transaction,
+              status: paymentDetails.status === 'SUCCESS' ? 'completed' : 
+                      paymentDetails.status === 'FAILURE' ? 'failed' : 'pending',
               paymentDetails
             };
           } catch (error) {
-            console.error(`Error fetching payment details for order ${transaction.orderId}:`, error);
-            return {
-              ...transaction,
-              paymentDetails: null
-            };
+            console.error(`Error fetching payment details for ${transaction.id}:`, error);
+            return transaction;
           }
         })
       );
 
       setTransactions(updatedTransactions);
-      
-      // Update local storage if transaction statuses have changed
-      const userTxHasChanges = updatedTransactions.some((t, i) => {
-        const originalTx = userInvestments.transactions.find(ut => 
-          ut.id === t.id || (ut.orderId && ut.orderId === t.orderId)
-        );
-        return originalTx && originalTx.status !== t.status;
-      });
-      
-      if (userTxHasChanges) {
-        const updatedInvestments = {
-          ...userInvestments,
-          transactions: userInvestments.transactions.map(t => {
-            const updated = updatedTransactions.find(ut => 
-              ut.id === t.id || (ut.orderId && ut.orderId === t.orderId)
-            );
-            return updated || t;
-          })
-        };
-        setUserInvestments(updatedInvestments);
-      }
     } catch (error) {
-      console.error("Error fetching payment details:", error);
-      
-      // Fall back to showing combined transactions without payment details
-      const pendingTransactions = loadPendingTransactions();
-      const allTransactions = [...userInvestments.transactions, ...pendingTransactions];
-      
-      // Remove any duplicates
-      const uniqueTransactions = allTransactions.filter((tx, index, self) => 
-        index === self.findIndex(t => t.id === tx.id || (t.orderId && t.orderId === tx.orderId))
-      );
-      
-      setTransactions(uniqueTransactions);
+      console.error('Error fetching payment details:', error);
     } finally {
       setLoading(false);
-      if (forceRefresh) {
-        setRefreshing(false);
-      }
+      setRefreshing(false);
     }
   };
 
-  // Handle visibility change to refresh data when page becomes visible
+  // Load data on component mount
+  useEffect(() => {
+    fetchPaymentDetails();
+    checkAndCleanupPendingTransactions();
+  }, []);
+
+  // Set up visibility change event handler
   useEffect(() => {
     const handleVisibilityChange = () => {
       setVisibilityState(document.visibilityState);
       if (document.visibilityState === 'visible') {
-        fetchPaymentDetails();
+        console.log('Tab became visible, checking for payment updates');
+        // Only refresh if we've been away for at least 5 seconds
+        const lastVisibleTime = Number(localStorage.getItem('lastVisibleTime') || '0');
+        const currentTime = Date.now();
+        if (currentTime - lastVisibleTime > 5000) {
+          checkAndCleanupPendingTransactions();
+          fetchPaymentDetails(true);
+        }
+      } else {
+        localStorage.setItem('lastVisibleTime', Date.now().toString());
       }
     };
 
@@ -322,208 +255,73 @@ const History = () => {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [userInvestments]);
+  }, []);
 
-  // Initial data fetch
+  // Force refresh on a timer for pending transactions
   useEffect(() => {
-    fetchPaymentDetails();
+    // Only run if we have transactions with pending status
+    const hasPendingTransactions = transactions.some(tx => 
+      tx.status === 'pending' && tx.orderId
+    );
     
-    // Also check and cleanup pending transactions on load
-    checkAndCleanupPendingTransactions();
-  }, [userInvestments.transactions]);
-
-  // Auto-refresh recent pending transactions
-  useEffect(() => {
-    // Find transactions that are pending and less than 10 minutes old
-    const recentPendingTransactions = transactions.filter(t => {
-      const isRecent = (new Date().getTime() - new Date(t.date).getTime()) < 10 * 60 * 1000; // 10 minutes
-      const isPending = t.status === 'pending' || 
-                        (t.paymentDetails && t.paymentDetails.status === 'PENDING');
-      return isRecent && isPending && t.orderId;
-    });
-    
-    if (recentPendingTransactions.length > 0 && visibilityState === 'visible') {
-      // Set up refresh interval for recent pending transactions
+    if (hasPendingTransactions) {
+      console.log('Has pending transactions, setting up refresh timer');
+      
       const refreshInterval = setInterval(() => {
-        console.log("Auto-refreshing recent pending transactions");
-        fetchPaymentDetails(true);
-      }, 15000); // Refresh every 15 seconds
+        if (document.visibilityState === 'visible') {
+          console.log('Checking pending transactions status...');
+          checkAndCleanupPendingTransactions();
+          fetchPaymentDetails(true);
+        }
+      }, 10000); // Check every 10 seconds
       
       return () => clearInterval(refreshInterval);
     }
-  }, [transactions, visibilityState]);
+  }, [transactions]);
 
-  const getStatusDisplay = (transaction: Transaction) => {
-    // If we have payment details, use that status
-    if (transaction.paymentDetails) {
-      const { status, failureReason } = transaction.paymentDetails;
-      
-      if (status === 'SUCCESS') {
-        return { text: 'Success', className: 'text-green-500' };
-      } else if (status === 'PENDING') {
-        return { text: 'Pending', className: 'text-yellow-500' };
-      } else {
-        return { 
-          text: 'Failed', 
-          className: 'text-red-500',
-          reason: failureReason
-        };
-      }
-    }
-    
-    // Fall back to original status
-    return { 
-      text: transaction.status, 
-      className: transaction.status === 'completed' ? 'text-green-500' : 'text-yellow-500' 
-    };
-  };
-
-  // Handle refresh
   const handleRefresh = () => {
     fetchPaymentDetails(true);
     checkAndCleanupPendingTransactions();
   };
-  
-  // Handle manual cleanup
-  const handleForceCleanup = () => {
-    checkAndCleanupPendingTransactions();
-  };
-
-  if (loading && transactions.length === 0) {
-    return (
-      <div className="max-w-md mx-auto min-h-screen bg-black text-white p-4 flex justify-center items-center">
-        Loading transaction history...
-      </div>
-    );
-  }
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-black text-white">
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center">
-            <Button 
-              variant="ghost" 
-              className="p-0 mr-3" 
-              onClick={() => navigate('/')}
-            >
-              <ArrowLeft className="h-6 w-6" />
-            </Button>
-            <h1 className="text-xl font-bold">Transaction History</h1>
-          </div>
-          <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs"
-              onClick={handleForceCleanup}
-            >
-              Fix Pending
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={handleRefresh}
-              disabled={refreshing}
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              <span className="sr-only">Refresh</span>
-            </Button>
-          </div>
-        </div>
-
-        <div className="bg-gray-900 rounded-lg p-4 mb-6">
-          {transactions.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow className="border-gray-800">
-                  <TableHead className="text-gray-400">Date</TableHead>
-                  <TableHead className="text-gray-400">Type</TableHead>
-                  <TableHead className="text-gray-400">Amount</TableHead>
-                  <TableHead className="text-gray-400">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {transactions.map((transaction: Transaction) => {
-                  const statusDisplay = getStatusDisplay(transaction);
-                  
-                  return (
-                  <TableRow key={transaction.id} className="border-gray-800">
-                    <TableCell>{new Date(transaction.date).toLocaleDateString()}</TableCell>
-                    <TableCell className="capitalize">{transaction.type}</TableCell>
-                    <TableCell>₹{transaction.amount}</TableCell>
-                    <TableCell>
-                        <span className={statusDisplay.className} title={statusDisplay.reason}>
-                          {statusDisplay.text}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              No transaction history available
-            </div>
-          )}
-        </div>
-        
-        {transactions.length > 0 && (
-          <div className="bg-gray-900 rounded-lg p-4">
-            <h2 className="text-lg font-semibold mb-3">Transaction Details</h2>
-            {transactions.map((transaction: Transaction) => {
-              const statusDisplay = getStatusDisplay(transaction);
-              const paymentId = transaction.paymentDetails?.paymentId || transaction.transactionId || transaction.id;
-              
-              return (
-              <div key={transaction.id} className="mb-4 p-3 border border-gray-800 rounded-lg">
-                <div className="flex justify-between mb-2">
-                  <span className="text-gray-400">Transaction ID</span>
-                    <span>{paymentId}</span>
-                </div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-gray-400">Date</span>
-                  <span>{new Date(transaction.date).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-gray-400">Type</span>
-                  <span className="capitalize">{transaction.type} purchase</span>
-                </div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-gray-400">Amount</span>
-                  <span>₹{transaction.amount}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Status</span>
-                    <span className={statusDisplay.className} title={statusDisplay.reason}>
-                      {statusDisplay.text}
-                  </span>
-                  </div>
-                  {statusDisplay.reason && (
-                    <div className="mt-2 text-sm text-red-400">
-                      Reason: {statusDisplay.reason}
-                    </div>
-                  )}
-                  {transaction.paymentDetails?.paymentMethod && (
-                    <div className="flex justify-between mt-2">
-                      <span className="text-gray-400">Payment Method</span>
-                      <span>{transaction.paymentDetails.paymentMethod}</span>
-                    </div>
-                  )}
-                  {transaction.orderId && (
-                    <div className="flex justify-between mt-2">
-                      <span className="text-gray-400">Order ID</span>
-                      <span className="text-xs truncate max-w-[180px]">{transaction.orderId}</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+    <div className="container mx-auto max-w-md px-4 py-6">
+      <div className="flex items-center justify-between mb-6 bg-gradient-to-r from-blue-600 to-blue-800 p-3 rounded-lg shadow-lg">
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => navigate('/')}
+          className="rounded-full bg-white/10 hover:bg-white/20 text-white"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <h1 className="text-xl font-bold text-white">Transaction History</h1>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="rounded-full bg-white/10 hover:bg-white/20 text-white"
+        >
+          <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
+        </Button>
       </div>
+
+      {isSignedIn ? (
+        <div className="bg-gradient-to-b from-gray-900 to-gray-950 rounded-lg shadow-lg overflow-hidden">
+          <TransactionHistory />
+        </div>
+      ) : (
+        <div className="text-center py-10 bg-gradient-to-b from-gray-900 to-gray-950 rounded-lg shadow-lg">
+          <p className="text-gray-400 mb-4">Please sign in to view your transaction history</p>
+          <Button 
+            onClick={() => navigate('/login')}
+            className="bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900"
+          >
+            Sign In
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

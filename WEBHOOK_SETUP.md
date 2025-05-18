@@ -1,92 +1,78 @@
-# Cashfree Webhook Setup Guide
+# Cashfree Webhook Setup
 
-This guide explains how to set up and configure Cashfree webhooks to properly verify payment status in your application.
+This document explains how to set up and configure webhooks for Cashfree payments in your application.
 
-## What is a webhook?
+## Why Webhooks?
 
-A webhook is a way for Cashfree to notify your application in real-time when payment events occur. Instead of your app constantly polling the Cashfree API to check payment status, Cashfree will automatically send HTTP POST requests to your webhook endpoint whenever a payment's status changes.
+Webhooks are essential for reliable payment processing because:
 
-## Why use webhooks?
+1. **Real-time Updates**: Webhooks provide instant notifications when payment status changes
+2. **Reliability**: They work even if the user closes their browser after initiating payment
+3. **Security**: Server-side verification is more secure than client-side polling
 
-Webhooks provide several advantages:
+## Webhook Setup
 
-1. **Reliability**: Ensure payments are properly recorded even if users close their browser
-2. **Security**: Properly verify payments server-side instead of relying on client-side verification
-3. **Real-time**: Get immediate notifications when payment status changes
-4. **Reduced API calls**: Minimize the need to poll Cashfree's API
+### 1. Webhook Endpoint
 
-## Implementation Steps
-
-### 1. Set Up Your Webhook Endpoint
-
-We've already created a webhook endpoint at:
-```
-/api/webhooks/cashfree
-```
-
-This endpoint handles Cashfree webhook notifications and updates your database accordingly.
-
-### 2. Configure Cashfree Dashboard
-
-1. Log in to your Cashfree merchant dashboard
-2. Go to Settings > Webhooks
-3. Click "Add New Webhook"
-4. Configure the webhook:
-   - **URL**: Enter your full webhook URL (e.g., `https://your-domain.com/api/webhooks/cashfree`)
-   - **Events to Subscribe**: Select at minimum "Payment Success" and "Payment Failure"
-   - **Secret Key**: Generate a strong secret key for signature verification
-   - **Status**: Ensure it's set to "Active"
-
-5. Save the configuration
-
-### 3. Set Environment Variables
-
-For security, set these environment variables in your hosting platform:
+The webhook endpoint for Cashfree notifications is:
 
 ```
-CASHFREE_SECRET_KEY=your_webhook_secret_key
-NEXT_PUBLIC_WEBHOOK_URL=https://your-domain.com/api/webhooks/cashfree
+https://your-domain.com/api/webhooks/cashfree
 ```
 
-### 4. Deploy Your Application
+This endpoint is already implemented in the codebase at `/api/webhooks/cashfree.js`.
 
-Make sure your application is deployed to a publicly accessible URL so Cashfree can send webhook events to it.
+### 2. Configuring in Cashfree Dashboard
 
-### 5. Test the Webhook
+1. Log in to your [Cashfree Merchant Dashboard](https://merchant.cashfree.com/merchants/login)
+2. Navigate to **Settings** > **Webhooks**
+3. Click on **Add New Webhook**
+4. Enter the webhook URL: `https://your-domain.com/api/webhooks/cashfree`
+5. Select the following events:
+   - Payment Success
+   - Payment Failure
+   - Order Status Change
+6. Save the webhook configuration
 
-1. Make a test payment
-2. Check your server logs to ensure the webhook is receiving events
-3. Verify that the payment was properly recorded in your database
+### 3. Webhook Signature Verification
 
-## Webhook Security
+The webhook handler verifies the signature of incoming requests for security. Cashfree includes:
 
-The webhook endpoint verifies the signature of incoming requests to ensure they come from Cashfree. This security feature prevents fraud.
+- `x-webhook-signature` - A base64-encoded HMAC-SHA256 signature
+- `x-webhook-timestamp` - The timestamp when the webhook was triggered
 
-In production, update the `verifyWebhookSignature` function in the webhook handler to properly implement cryptographic verification using the provided secret key.
+Our webhook handler validates these to ensure the request is legitimate.
 
 ## Webhook Events
 
-The implemented webhook handles the following Cashfree events:
+The webhook handles the following events:
 
-1. **PAYMENT_SUCCESS**: When a payment is successfully completed
-2. **PAYMENT_FAILED**: When a payment fails for any reason
+1. **Payment Success**:
+   - Updates the transaction status to "completed"
+   - Updates the user's investment records
+   - Stores payment details from Cashfree
+
+2. **Payment Failure**:
+   - Updates the transaction status to "failed"
+   - Records the failure reason
+
+## Testing Webhooks
+
+To test webhooks locally:
+
+1. Use a tool like [ngrok](https://ngrok.com/) to expose your local server
+2. Run: `ngrok http 3000`
+3. Copy the HTTPS URL provided by ngrok
+4. Update your webhook URL in the Cashfree dashboard temporarily
+5. Make a test payment
+6. Check your server logs for webhook processing
 
 ## Troubleshooting
 
-If webhooks aren't working:
+Common webhook issues:
 
-1. Check that your webhook URL is publicly accessible
-2. Verify environment variables are correctly set
-3. Look for any errors in your server logs
-4. Ensure the webhook is configured as "Active" in Cashfree dashboard
-5. Verify your webhook handler is correctly processing the events
+1. **Webhook URL Not Accessible**: Ensure your URL is publicly accessible
+2. **Signature Verification Failure**: Check that you're using the correct secret key
+3. **Events Not Received**: Verify webhook configuration in Cashfree dashboard
 
-## Local Development
-
-For local development and testing, you can use tools like ngrok to expose your local server to the internet with a temporary URL.
-
-```bash
-ngrok http 3000
-```
-
-Then update your Cashfree webhook URL to the ngrok URL. 
+For detailed logs, check your server logs or Vercel logs if deployed there. 

@@ -20,6 +20,56 @@ const Settings: React.FC = () => {
   const { user } = useUser();
   const { signOut } = useClerk();
 
+  // URL mapping for external pages
+  const externalPages = {
+    privacy: {
+      url: 'https://www.aczen.in/privacy',
+      title: 'Privacy & Security'
+    },
+    help: {
+      url: 'https://tally.so/r/mRga8p',
+      title: 'Help Center'
+    },
+    contact: {
+      url: 'https://www.aczen.in/#contact',
+      title: 'Contact Us'
+    },
+    terms: {
+      url: 'https://www.aczen.in/terms',
+      title: 'Terms of Service'
+    },
+    privacyPolicy: {
+      url: 'https://www.aczen.in/privacy',
+      title: 'Privacy Policy'
+    },
+    about: {
+      url: 'https://www.aczen.in/about',
+      title: 'About Us'
+    }
+  };
+
+  const handleNavigation = (route: string) => {
+    if (route === '/profile') {
+      navigate(route);
+    } else {
+      // Get the route name without the leading slash
+      const routeName = route.substring(1);
+      
+      // Check if this is an external page with WebView
+      if (externalPages[routeName as keyof typeof externalPages]) {
+        const pageInfo = externalPages[routeName as keyof typeof externalPages];
+        navigate('/webview', { 
+          state: { 
+            url: pageInfo.url, 
+            title: pageInfo.title 
+          } 
+        });
+      } else {
+        navigate(route);
+      }
+    }
+  };
+
   const settingsSections = [
     {
       title: 'Account',
@@ -39,7 +89,7 @@ const Settings: React.FC = () => {
       title: 'Legal',
       items: [
         { name: 'Terms of Service', icon: FileText, route: '/terms' },
-        { name: 'Privacy Policy', icon: Shield, route: '/privacy-policy' },
+        { name: 'Privacy Policy', icon: Shield, route: '/privacyPolicy' },
         { name: 'About Us', icon: Mail, route: '/about' }
       ]
     }
@@ -89,7 +139,7 @@ const Settings: React.FC = () => {
                 <button 
                   key={itemIndex} 
                   className="w-full flex items-center p-4 hover:bg-gray-800 transition-colors border-b border-gray-800 last:border-0"
-                  onClick={() => navigate(item.route)}
+                  onClick={() => handleNavigation(item.route)}
                 >
                   <span className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-800">
                     <item.icon className="w-4 h-4" />

@@ -86,8 +86,31 @@ export class UpiPaymentService {
         clearInterval(this.statusPollingInterval);
       }
       
-      // Start aggressive polling for status updates
-      this.startStatusPolling(pendingTxnId);
+      // Perform an immediate check before starting polling
+      try {
+        const immediateStatus = await this.checkPaymentStatus(pendingTxnId);
+        console.log('Immediate payment status check result:', immediateStatus);
+        
+        // If status is already resolved, trigger event right away
+        if (immediateStatus.status === 'success' || immediateStatus.status === 'failure') {
+          localStorage.removeItem('pending_txn_id');
+          localStorage.removeItem('upi_payment_start_time');
+          
+          // Trigger an event with the final status
+          const event = new CustomEvent('upi_status_updated', { 
+            detail: { status: immediateStatus, finalUpdate: true } 
+          });
+          document.dispatchEvent(event);
+          
+          // Don't start polling if we already have a final status
+          return;
+        }
+      } catch (error) {
+        console.error('Error in immediate payment status check:', error);
+      }
+      
+      // Start aggressive polling for status updates only if immediate check didn't resolve
+      this.startStatusPolling(pendingTxnId, 15, 1500);
       
       // Trigger a custom event that components can listen for
       const event = new CustomEvent('upi_app_returned', { 
@@ -133,6 +156,21 @@ export class UpiPaymentService {
             localStorage.removeItem('pending_txn_id');
             localStorage.removeItem('upi_payment_start_time');
           }
+          // If we still don't have a definitive status after max attempts,
+          // we should prompt the user to check their UPI app or try again
+          else if (attempts >= maxAttempts) {
+            // Update status to let user know we couldn't determine the status
+            const timeoutStatus: PaymentStatus = {
+              ...status,
+              message: "We couldn't verify your payment status. Please check your UPI app to confirm the payment status."
+            };
+            
+            // Trigger an event with the timeout status
+            const timeoutEvent = new CustomEvent('upi_status_updated', { 
+              detail: { status: timeoutStatus, finalUpdate: true } 
+            });
+            document.dispatchEvent(timeoutEvent);
+          }
         } else {
           // Trigger event for status update (not final)
           const event = new CustomEvent('upi_status_updated', { 
@@ -147,6 +185,21 @@ export class UpiPaymentService {
         if (attempts >= maxAttempts) {
           clearInterval(this.statusPollingInterval);
           this.statusPollingInterval = null;
+          
+          // Create an error status to inform the user
+          const errorStatus: PaymentStatus = {
+            status: 'unknown',
+            transactionId: transactionId,
+            transactionRef: '',
+            amount: '',
+            message: "Error checking payment status. Please check your UPI app to confirm the payment."
+          };
+          
+          // Trigger an event with the error status
+          const errorEvent = new CustomEvent('upi_status_updated', { 
+            detail: { status: errorStatus, finalUpdate: true } 
+          });
+          document.dispatchEvent(errorEvent);
         }
       }
     }, intervalMs);
@@ -249,13 +302,29 @@ export class UpiPaymentService {
     if (Capacitor.isNativePlatform()) {
       console.log('Opening UPI URL in Capacitor native app:', upiUrl);
       
-      // Make sure app state listener is set up
-      this.setupAppStateListener();
+      // Use Capacitor App plugin to open URL externally
+      try {
+        App.openUrl({ url: upiUrl }).catch(error => {
+          console.error('Error opening UPI URL in native app:', error);
+        });
+        
+        return true;
+      } catch (error) {
+        console.error('Error opening UPI URL in native app:', error);
+        return false;
+      }
+    } else {
+      // For browser, use standard location.href
+      try {
+        // When the app returns, instead of redirecting to the uploaded screen,
+        // we'll check the payment status directly
+        window.location.href = upiUrl;
+        return true;
+      } catch (error) {
+        console.error('Error opening UPI URL in browser:', error);
+        return false;
+      }
     }
-    
-    // Redirect to UPI URL
-    window.location.href = upiUrl;
-    return true;
   }
   
   /**

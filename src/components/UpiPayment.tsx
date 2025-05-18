@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { UpiPaymentService, UpiPaymentParams, PaymentStatus } from '../services/upiPaymentService';
+import UpiPaymentStatus from './UpiPaymentStatus';
 
 interface UpiPaymentProps {
   amount: string;
@@ -34,6 +35,46 @@ const UpiPayment: React.FC<UpiPaymentProps> = ({
     setSupportsUpi(upiService.supportsUpi());
   }, []);
   
+  // Handler for payment status updates
+  const handlePaymentStatusUpdate = useCallback((event: Event) => {
+    const customEvent = event as CustomEvent;
+    const { status, finalUpdate } = customEvent.detail;
+    
+    console.log('Payment status update received:', status, finalUpdate);
+    
+    setPaymentStatus(status);
+    setIsLoading(false);
+    
+    // Handle status callbacks
+    if (status.status === 'success' && onSuccess) {
+      onSuccess(status);
+    } else if (status.status === 'failure' && onFailure) {
+      onFailure(status);
+    } else if (status.status === 'pending' && onPending) {
+      onPending(status);
+    }
+  }, [onSuccess, onFailure, onPending]);
+  
+  // Handler for when the app returns from UPI payment
+  const handleAppReturn = useCallback(() => {
+    console.log('App returned from UPI payment');
+    setIsLoading(true);
+  }, []);
+  
+  // Set up event listeners for payment status updates
+  useEffect(() => {
+    // Listen for payment status updates
+    document.addEventListener('upi_status_updated', handlePaymentStatusUpdate);
+    // Listen for app return events
+    document.addEventListener('upi_app_returned', handleAppReturn);
+    
+    return () => {
+      // Clean up event listeners
+      document.removeEventListener('upi_status_updated', handlePaymentStatusUpdate);
+      document.removeEventListener('upi_app_returned', handleAppReturn);
+    };
+  }, [handlePaymentStatusUpdate, handleAppReturn]);
+  
   // Check for payment status on component mount (for handling returns from UPI apps)
   useEffect(() => {
     const checkPendingPayment = async () => {
@@ -48,8 +89,8 @@ const UpiPayment: React.FC<UpiPaymentProps> = ({
           try {
             setIsLoading(true);
             
-            // Poll for payment status
-            const status = await upiService.pollPaymentStatus(pendingTxnId);
+            // Check payment status immediately
+            const status = await upiService.checkPaymentStatus(pendingTxnId);
             setPaymentStatus(status);
             
             // Handle based on status
@@ -63,8 +104,10 @@ const UpiPayment: React.FC<UpiPaymentProps> = ({
               // Clear local storage after failed check
               localStorage.removeItem('pending_txn_id');
               localStorage.removeItem('upi_payment_start_time');
-            } else if (onPending) {
+            } else if (status.status === 'pending' && onPending) {
               onPending(status);
+              // Start polling for pending transactions
+              upiService.startStatusPolling(pendingTxnId);
             }
           } catch (error) {
             setError('Failed to check payment status');
@@ -153,6 +196,19 @@ const UpiPayment: React.FC<UpiPaymentProps> = ({
     }
   };
   
+  // Handle retry payment
+  const handleRetry = () => {
+    handlePayment();
+  };
+  
+  // Handle start over
+  const handleStartOver = () => {
+    setPaymentStatus(null);
+    setError(null);
+    localStorage.removeItem('pending_txn_id');
+    localStorage.removeItem('upi_payment_start_time');
+  };
+  
   return (
     <div className="upi-payment-container">
       {error && (
@@ -167,23 +223,25 @@ const UpiPayment: React.FC<UpiPaymentProps> = ({
         </div>
       )}
       
-      <button 
-        className="upi-payment-button"
-        onClick={handlePayment}
-        disabled={isLoading || !supportsUpi}
-      >
-        {isLoading ? 'Processing...' : `Pay ₹${amount} via UPI`}
-      </button>
-      
-      {paymentStatus && (
-        <div className={`upi-payment-status upi-payment-status-${paymentStatus.status}`}>
-          <p>Payment {paymentStatus.status}</p>
-          {paymentStatus.message && <p>{paymentStatus.message}</p>}
-        </div>
+      {!paymentStatus && (
+        <button 
+          className="upi-payment-button"
+          onClick={handlePayment}
+          disabled={isLoading || !supportsUpi}
+        >
+          {isLoading ? 'Processing...' : `Pay ₹${amount} via UPI`}
+        </button>
       )}
       
+      <UpiPaymentStatus 
+        status={paymentStatus}
+        isLoading={isLoading}
+        onRetry={handleRetry}
+        onStartOver={handleStartOver}
+      />
+      
       {/* For web testing only */}
-      {upiService.isMobileDevice() && !upiService.supportsUpi() && (
+      {upiService.isMobileDevice() && !upiService.supportsUpi() && !paymentStatus && (
         <button 
           className="upi-payment-check-button"
           onClick={checkStatus}

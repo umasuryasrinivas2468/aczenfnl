@@ -4,6 +4,30 @@
       "source": "/api/cashfree/:path*", 
       "destination": "https://api.cashfree.com/:path*" 
     },
+    {
+      "source": "/api/sync-transactions",
+      "destination": "/api/sync-transactions.js"
+    },
+    {
+      "source": "/api/check-transactions",
+      "destination": "/api/payment-status.js"
+    },
+    {
+      "source": "/api/cashfree/pg/orders/:orderId",
+      "destination": "/api/cashfree/pg/orders/[orderId]/index.js"
+    },
+    {
+      "source": "/api/cashfree/pg/orders/:orderId/payments",
+      "destination": "/api/cashfree/pg/orders/[orderId]/payments.js"
+    },
+    {
+      "source": "/api/cashfree/pg/orders/:orderId/notify",
+      "destination": "/api/cashfree/pg/orders/[orderId]/notify.js"
+    },
+    {
+      "source": "/api/webhooks/cashfree",
+      "destination": "/api/webhooks/cashfree.js"
+    },
     { 
       "source": "/(.*)", 
       "destination": "/index.html" 

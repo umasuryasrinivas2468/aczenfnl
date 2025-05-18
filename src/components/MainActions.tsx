@@ -2,7 +2,7 @@ import React from 'react';
 import BuyDialog from './BuyDialog';
 import OrderDialog from './OrderDialog';
 import { Button } from './ui/button';
-import { History, Award, Map } from 'lucide-react';
+import { History, Award } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import HeroSection from './HeroSection';
 
@@ -33,17 +33,6 @@ const MainActions: React.FC = () => {
         >
           <Award className="mr-2" size={16} />
           Rewards
-        </Button>
-      </div>
-
-      <div className="flex gap-3">
-        <Button 
-          variant="outline" 
-          className="flex-1 h-12 border-gray-700 text-white bg-gray-900 hover:bg-gray-800 rounded-lg"
-          onClick={() => navigate('/travel')}
-        >
-          <Map className="mr-2" size={16} />
-          Travel & Transit
         </Button>
       </div>
       

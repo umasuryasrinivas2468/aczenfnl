@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -11,20 +11,69 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { Coins, CreditCard } from "lucide-react"
+import { Coins, Info, Copy, LayoutList } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { useLocalStorage } from "@/hooks/useLocalStorage"
 import { useUser } from "@clerk/clerk-react"
-import { createOrder } from "@/services/paymentService"
-import { UpiPaymentButton } from './UpiPaymentButton'
-import { Capacitor } from '@capacitor/core'
+import { initiateUpiIntentPayment, generateOrderId } from "@/services/upiIntentService"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { supabase } from '@/lib/supabase'
 import { useNavigate } from 'react-router-dom'
 
-// Define the type for window with Cashfree
-declare global {
-  interface Window {
-    Cashfree: any;
-  }
+// Debug helper - adds a global function to enable UPI intent testing mode
+if (typeof window !== 'undefined') {
+  (window as any).enableUpiIntent = () => {
+    localStorage.setItem('force_upi_intent', 'true');
+    console.log("UPI Intent testing mode ENABLED");
+    alert("UPI Intent testing mode enabled. Reload the page for changes to take effect.");
+  };
+  
+  (window as any).disableUpiIntent = () => {
+    localStorage.removeItem('force_upi_intent');
+    console.log("UPI Intent testing mode DISABLED");
+    alert("UPI Intent testing mode disabled. Reload the page for changes to take effect.");
+  };
+
+  (window as any).enableDirectUpi = () => {
+    localStorage.setItem('use_direct_upi', 'true');
+    console.log("Direct UPI mode ENABLED");
+    alert("Direct UPI mode enabled. Reload the page for changes to take effect.");
+  };
+  
+  (window as any).disableDirectUpi = () => {
+    localStorage.removeItem('use_direct_upi');
+    console.log("Direct UPI mode DISABLED");
+    alert("Direct UPI mode disabled. Reload the page for changes to take effect.");
+  };
+
+  // Add function to manually open UPI
+  (window as any).openUPI = (url) => {
+    if (!url) {
+      const lastUrl = localStorage.getItem('last_upi_url');
+      if (lastUrl) {
+        window.location.href = lastUrl;
+        return true;
+      }
+      return false;
+    }
+    window.location.href = url;
+    return true;
+  };
+
+  // Debug function to check Supabase connection
+  (window as any).testSupabase = async () => {
+    try {
+      const { data, error } = await supabase.from('transactions').select('*').limit(1);
+      console.log('Supabase test result:', { data, error });
+      if (error) {
+        alert(`Supabase connection error: ${error.message}`);
+      } else {
+        alert(`Supabase connection successful! Found ${data?.length || 0} records.`);
+      }
+    } catch (err) {
+      console.error('Supabase test error:', err);
+      alert(`Supabase connection error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
 }
 
 const BuyDialog = () => {
@@ -33,51 +82,44 @@ const BuyDialog = () => {
   const navigate = useNavigate()
   const [amount, setAmount] = useState("")
   const [metal, setMetal] = useState("gold")
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
-  const [phone, setPhone] = useState("")
-  const [step, setStep] = useState(1) // 1: Metal & Amount, 2: Customer Details
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState("standard") // "standard" or "upi"
-  const isMobileDevice = Capacitor.isNativePlatform()
-  const isAndroid = isMobileDevice && Capacitor.getPlatform() === 'android'
-  
-  // Get and update user investments from local storage
-  const [userInvestments, setUserInvestments] = useLocalStorage('userInvestments', {
-    totalInvestment: 0,
-    investments: {
-      gold: {
-        type: 'gold',
-        amount: 0,
-        weight: 0,
-        weightUnit: 'grams',
-      },
-      silver: {
-        type: 'silver',
-        amount: 0,
-        weight: 0,
-        weightUnit: 'grams',
-      }
-    },
-    transactions: []
-  })
+  const [forceUpiEnabled, setForceUpiEnabled] = useState(false)
+  const [directUpiEnabled, setDirectUpiEnabled] = useState(false)
+  const [paymentStatus, setPaymentStatus] = useState<{ orderId?: string, url?: string } | null>(null)
 
-  // Pre-fill user information if available
-  React.useEffect(() => {
-    if (user) {
-      if (user.fullName) setName(user.fullName)
-      if (user.primaryEmailAddress) setEmail(user.primaryEmailAddress.emailAddress)
-      if (user.primaryPhoneNumber) setPhone(user.primaryPhoneNumber.phoneNumber)
-    }
+  // Debug log when component mounts
+  useEffect(() => {
+    console.log("BuyDialog component mounted")
+    console.log("initiateUpiIntentPayment imported:", typeof initiateUpiIntentPayment)
+    console.log("generateOrderId imported:", typeof generateOrderId)
     
-    // Set UPI as default payment method on Android devices
-    if (isAndroid) {
-      setPaymentMethod("upi")
-    }
-  }, [user, isAndroid])
+    // Check if force UPI intent is enabled
+    const forceUpi = localStorage.getItem('force_upi_intent') === 'true'
+    setForceUpiEnabled(forceUpi)
+    console.log("Force UPI Intent mode:", forceUpi ? "ENABLED" : "DISABLED")
 
-  const validateFirstStep = () => {
+    // Check if direct UPI mode is enabled
+    const directUpi = localStorage.getItem('use_direct_upi') === 'true'
+    setDirectUpiEnabled(directUpi)
+    console.log("Direct UPI mode:", directUpi ? "ENABLED" : "DISABLED")
+
+    // Test Supabase connection on component mount
+    const testSupabaseConnection = async () => {
+      try {
+        console.log('Testing Supabase connection...');
+        const { data, error } = await supabase.from('transactions').select('count').single();
+        console.log('Supabase connection test result:', { data, error });
+      } catch (err) {
+        console.error('Error testing Supabase connection:', err);
+      }
+    };
+    
+    testSupabaseConnection();
+  }, [])
+
+  const validateInput = () => {
+    console.log("Validating input:", { amount, metal })
     if (!amount) {
       toast({
         variant: "destructive",
@@ -100,380 +142,331 @@ const BuyDialog = () => {
     return true
   }
 
-  const validateSecondStep = () => {
-    if (!name) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Please enter your name",
-      })
-      return false
-    }
-
-    if (!email) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Please enter your email",
-      })
-      return false
-    }
-
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Please enter a valid email address",
-      })
-      return false
-    }
-
-    if (!phone) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Please enter your phone number",
-      })
-      return false
-    }
-
-    // Basic phone validation (10 digits)
-    const phoneRegex = /^\d{10}$/
-    if (!phoneRegex.test(phone)) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Please enter a valid 10-digit phone number",
-      })
-      return false
-    }
-
-    return true
+  const openDialog = () => {
+    console.log("Opening dialog")
+    setIsOpen(true)
   }
 
-  const handleNextStep = () => {
-    if (validateFirstStep()) {
-      setStep(2)
-    }
-  }
-
-  const handleUpiSuccess = (data: any) => {
-    // Record successful transaction
-    const amountValue = parseFloat(amount)
-    const transactionData = {
-      id: data.orderId,
-      type: metal,
-      amount: amountValue,
-      date: new Date().toISOString(),
-      status: 'completed'
-    }
-    
-    // Update investments
-    const updatedInvestments = { ...userInvestments }
-    updatedInvestments.totalInvestment += amountValue
-    updatedInvestments.investments[metal].amount += amountValue
-    
-    // Calculate weight based on current metal price (simplified for example)
-    const metalPrice = metal === 'gold' ? 5500 : 70 // Sample rates per gram
-    const weightInGrams = amountValue / metalPrice
-    updatedInvestments.investments[metal].weight += weightInGrams
-    
-    // Add transaction to history
-    updatedInvestments.transactions.push(transactionData)
-    
-    // Save updated investments
-    setUserInvestments(updatedInvestments)
-    
-    // Close dialog
+  const closeDialog = () => {
+    console.log("Closing dialog")
     setIsOpen(false)
-    
-    // Show success message
-    toast({
-      title: "Purchase Successful",
-      description: `Successfully purchased ${metal} worth ₹${amountValue}`,
-    })
+    setPaymentStatus(null)
   }
 
-  const handleGoToUpiCheckout = () => {
-    setIsOpen(false)
-    navigate('/upi-checkout')
-  }
-
-  const handleBuy = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!validateSecondStep()) {
-      return
-    }
-
-    // If UPI payment is selected on Android, redirect to UPI Intent page
-    if (paymentMethod === "upi" && isAndroid) {
-      setIsOpen(false)
-      navigate('/upi-checkout', { 
-        state: { 
-          amount: parseFloat(amount),
-          metal 
-        } 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        toast({
+          title: "Copied to clipboard",
+          description: "UPI URL copied successfully"
+        })
       })
-      return
-    }
+      .catch(err => {
+        console.error('Failed to copy: ', err)
+        toast({
+          variant: "destructive",
+          title: "Copy failed",
+          description: "Failed to copy to clipboard"
+        })
+      })
+  }
 
-    setIsLoading(true)
-
-    try {
-      const amountValue = parseFloat(amount)
-      const customerId = user?.id || "guest_user"
-      const orderNote = metal // Set order note as "gold" or "silver"
-      
-      // Create order using the payment service
-      const orderResponse = await createOrder(
-        amountValue, 
-        {
-          customerId: customerId,
-          customerPhone: phone,
-          customerName: name,
-          customerEmail: email
-        },
-        orderNote
-      )
-      
-      // Store transaction details in localStorage to retrieve after payment
-      const transactionData = {
-        id: orderResponse.order_id,
-        type: metal,
-        amount: amountValue,
-        date: new Date().toISOString(),
-        status: 'pending'
+  const handleRetryUPI = () => {
+    if (paymentStatus?.url) {
+      window.location.href = paymentStatus.url
+    } else {
+      const lastUrl = localStorage.getItem('last_upi_url')
+      if (lastUrl) {
+        window.location.href = lastUrl
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No UPI URL found to retry"
+        })
       }
+    }
+  }
+
+  const handleTryBasicUPI = () => {
+    const basicUrl = localStorage.getItem('basic_upi_url')
+    if (basicUrl) {
+      window.location.href = basicUrl
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No basic UPI URL found"
+      })
+    }
+  }
+
+  const viewTransactionHistory = () => {
+    navigate('/history')
+  }
+
+  // Manual transaction recording as a fallback
+  const manuallyRecordTransaction = async (orderId: string, userId: string, amountValue: number, metalType: string) => {
+    try {
+      console.log('Manually recording transaction in Supabase...');
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([
+          {
+            order_id: orderId,
+            user_id: userId,
+            amount: amountValue,
+            metal_type: metalType,
+            status: 'PENDING',
+            payment_method: 'UPI',
+            created_at: new Date().toISOString()
+          }
+        ])
+        .select();
+        
+      if (error) {
+        console.error('Manual transaction recording failed:', error);
+      } else {
+        console.log('Manual transaction recording succeeded:', data);
+      }
+    } catch (err) {
+      console.error('Error in manual transaction recording:', err);
+    }
+  };
+
+  const handleBuy = async () => {
+    console.log("Buy button clicked", { amount, metal, user })
+    
+    if (!validateInput()) {
+      console.log("Input validation failed")
+      return
+    }
+    
+    if (!user) {
+      console.log("No user found")
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please log in to continue",
+      })
+      return
+    }
+    
+    setIsLoading(true)
+    
+    try {
+      // Generate order ID that includes user ID and metal type
+      console.log("Generating order ID with user:", user.id, "metal:", metal)
+      const userId = user.id
+      const orderId = generateOrderId(userId, metal)
+      console.log("Generated order ID:", orderId)
       
+      const customerName = user.fullName || ''
+      const customerEmail = user.primaryEmailAddress?.emailAddress || ''
+      const customerPhone = user.primaryPhoneNumber?.toString() || '9999999999'
+      
+      console.log(`Initiating UPI payment: ${metal} worth ₹${parseFloat(amount)}, Order ID: ${orderId}`)
+      
+      // Store transaction in local storage for recovery
+      const transactionData = {
+        orderId,
+        amount: parseFloat(amount),
+        type: metal,
+        timestamp: new Date().toISOString(),
+        paymentMethod: 'UPI',
+        userId: userId
+      }
+      console.log("Storing transaction data:", transactionData)
       localStorage.setItem('pendingTransaction', JSON.stringify(transactionData))
       
-      // Check if this is a demo session
-      const isDemoSession = orderResponse.payment_session_id.startsWith('demo_session_');
+      // Set the payment status to show in the UI
+      setPaymentStatus({ orderId })
+
+      // Try to manually record the transaction first for better reliability
+      await manuallyRecordTransaction(orderId, userId, parseFloat(amount), metal);
       
-      if (isDemoSession && process.env.NODE_ENV !== 'production') {
-        // For demo purposes, show a success message and close dialog
-        toast({
-          title: "Demo Payment",
-          description: "This is a demo payment flow. In production, this would open the Cashfree checkout.",
-        });
-        
-        setTimeout(() => {
-          // Simulate redirect to success page
-          window.location.href = '/payment-success';
-        }, 1500);
-        
-        setIsLoading(false);
-        return;
+      // Initiate UPI Intent payment
+      console.log("Calling initiateUpiIntentPayment with params:", {
+        orderId,
+        amount: parseFloat(amount),
+        customerName,
+        customerEmail,
+        customerPhone,
+        metalType: metal,
+        directUpi: directUpiEnabled
+      })
+      
+      await initiateUpiIntentPayment({
+        orderId,
+        amount: parseFloat(amount),
+        customerName,
+        customerEmail,
+        customerPhone,
+        vpa: "aczentechnologiesp.cf@axisbank", // Merchant VPA
+        description: `Payment for ${metal} worth ₹${parseFloat(amount)}`,
+        userId: userId,
+        metalType: metal
+      })
+      
+      // Capture the UPI URL for retry options
+      const lastUrl = localStorage.getItem('last_upi_url')
+      if (lastUrl) {
+        setPaymentStatus(prev => ({ ...prev, url: lastUrl }))
       }
       
-      // Initialize Cashfree checkout
-      const cashfree = window.Cashfree({
-        mode: "production",
-      });
-      
-      const checkoutOptions = {
-        paymentSessionId: orderResponse.payment_session_id,
-        redirectTarget: "_self", // Redirect in the same tab
-      };
-      
-      await cashfree.checkout(checkoutOptions);
+      // Don't close dialog after initiating payment so user can see options
+      // closeDialog()
     } catch (error) {
-      console.error("Payment error:", error);
+      console.error('Error initiating UPI payment:', error)
       toast({
         variant: "destructive",
         title: "Payment Error",
-        description: "There was an error processing your payment. Please try again.",
+        description: error instanceof Error ? error.message : 'Failed to initiate payment. Please try again.'
       })
     } finally {
       setIsLoading(false)
     }
   }
 
-  const resetDialog = () => {
-    setStep(1)
-    setAmount("")
-    setIsLoading(false)
-  }
-
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => {
-      setIsOpen(open)
-      if (!open) resetDialog()
-    }}>
-      <DialogTrigger asChild>
-        <Button 
-          className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg"
-        >
-          <Coins className="mr-2" size={16} />
-          Buy
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="bg-gray-900 text-white border-gray-800 sm:max-w-[425px]">
-        <DialogHeader className="text-center">
-          <DialogTitle className="text-xl">
-            {step === 1 ? "Buy Digital Assets" : "Complete Your Purchase"}
-          </DialogTitle>
-          <DialogDescription className="text-gray-400">
-            {step === 1 
-              ? "Enter amount and select asset type" 
-              : "Enter your details to complete the purchase"
-            }
-          </DialogDescription>
-        </DialogHeader>
-        
-        {step === 1 ? (
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="amount">Amount (₹)</Label>
-              <Input
-                id="amount"
-                type="number"
-                placeholder="Enter amount"
-                className="bg-gray-800 border-gray-700 text-white"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-              <p className="text-xs text-gray-400">Min: ₹1, Max: ₹5,000</p>
-            </div>
-            
-            <div className="space-y-2">
-              <Label>Asset Type</Label>
-              <RadioGroup 
-                defaultValue="gold" 
-                value={metal}
-                onValueChange={setMetal}
-                className="flex gap-4"
-              >
-                <div className="flex items-center space-x-2 bg-gray-800 p-3 rounded-lg flex-1 cursor-pointer">
-                  <RadioGroupItem value="gold" id="gold" />
-                  <Label htmlFor="gold" className="cursor-pointer">Gold</Label>
-                </div>
-                <div className="flex items-center space-x-2 bg-gray-800 p-3 rounded-lg flex-1 cursor-pointer">
-                  <RadioGroupItem value="silver" id="silver" />
-                  <Label htmlFor="silver" className="cursor-pointer">Silver</Label>
-                </div>
-              </RadioGroup>
-            </div>
-            
-            {isAndroid && (
+    <>
+      <Button 
+        className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg"
+        onClick={openDialog}
+      >
+        <Coins className="mr-2" size={16} />
+        Buy
+      </Button>
+      
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="bg-gray-900 text-white border-gray-800 sm:max-w-[425px]">
+          <DialogHeader className="text-center">
+            <DialogTitle className="text-xl">
+              Buy Digital Assets
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Enter amount and select asset type
+            </DialogDescription>
+          </DialogHeader>
+          
+          {paymentStatus ? (
+            <div className="space-y-4 py-4">
+              <Alert className="bg-blue-900/20 border-blue-800">
+                <Info className="h-4 w-4 text-blue-400" />
+                <AlertDescription className="text-blue-100 text-sm">
+                  UPI payment initiated. If UPI apps haven't opened automatically, please try the options below.
+                </AlertDescription>
+              </Alert>
+              
+              <div className="space-y-2 text-sm">
+                <p className="text-gray-400">Order ID: <span className="text-white">{paymentStatus.orderId}</span></p>
+                <p className="text-gray-400">Amount: <span className="text-white">₹{amount}</span></p>
+                <p className="text-gray-400">Asset: <span className="text-white capitalize">{metal}</span></p>
+              </div>
+              
               <div className="space-y-2">
-                <Label>Payment Method</Label>
+                <Button
+                  className="w-full"
+                  onClick={handleRetryUPI}
+                >
+                  Retry Opening UPI Apps
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleTryBasicUPI}
+                >
+                  Try Simplified UPI Format
+                </Button>
+                {paymentStatus.url && (
+                  <Button
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => copyToClipboard(paymentStatus.url!)}
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy UPI URL
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  onClick={viewTransactionHistory}
+                >
+                  <LayoutList className="h-4 w-4 mr-2" />
+                  View Transaction History
+                </Button>
+              </div>
+              
+              <div className="pt-2">
+                <Button
+                  variant="outline"
+                  className="w-full text-red-400 border-red-900 hover:bg-red-900/20"
+                  onClick={() => setPaymentStatus(null)}
+                >
+                  Start Over
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="amount">Amount (₹)</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  placeholder="Enter amount"
+                  className="bg-gray-800 border-gray-700 text-white"
+                  value={amount}
+                  onChange={(e) => {
+                    console.log("Amount changed:", e.target.value)
+                    setAmount(e.target.value)
+                  }}
+                />
+                <p className="text-xs text-gray-400">Min: ₹1, Max: ₹5,000</p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Asset Type</Label>
                 <RadioGroup 
-                  value={paymentMethod}
-                  onValueChange={setPaymentMethod}
+                  defaultValue="gold" 
+                  value={metal}
+                  onValueChange={(value) => {
+                    console.log("Metal changed:", value)
+                    setMetal(value)
+                  }}
                   className="flex gap-4"
                 >
                   <div className="flex items-center space-x-2 bg-gray-800 p-3 rounded-lg flex-1 cursor-pointer">
-                    <RadioGroupItem value="standard" id="standard" />
-                    <Label htmlFor="standard" className="cursor-pointer flex items-center">
-                      <CreditCard size={16} className="mr-2" />
-                      Card/NetBanking
-                    </Label>
+                    <RadioGroupItem value="gold" id="gold" />
+                    <Label htmlFor="gold" className="cursor-pointer">Gold</Label>
                   </div>
                   <div className="flex items-center space-x-2 bg-gray-800 p-3 rounded-lg flex-1 cursor-pointer">
-                    <RadioGroupItem value="upi" id="upi" />
-                    <Label htmlFor="upi" className="cursor-pointer">UPI</Label>
+                    <RadioGroupItem value="silver" id="silver" />
+                    <Label htmlFor="silver" className="cursor-pointer">Silver</Label>
                   </div>
                 </RadioGroup>
               </div>
-            )}
-            
-            <Button 
-              onClick={handleNextStep} 
-              className="w-full"
-            >
-              Continue
-            </Button>
-            
-            {isAndroid && (
-              <div className="pt-2">
-                <Button 
-                  variant="outline" 
-                  className="w-full text-blue-400 border-blue-800"
-                  onClick={handleGoToUpiCheckout}
-                >
-                  Quick UPI Payment
-                </Button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <form onSubmit={handleBuy} className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                placeholder="Your name"
-                className="bg-gray-800 border-gray-700 text-white"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="your@email.com"
-                className="bg-gray-800 border-gray-700 text-white"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input
-                id="phone"
-                placeholder="10-digit number"
-                className="bg-gray-800 border-gray-700 text-white"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </div>
-            
-            <div className="bg-gray-800 p-3 rounded-lg space-y-1">
-              <div className="flex justify-between">
-                <span className="text-gray-400">Amount:</span>
-                <span>₹{amount}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Asset:</span>
-                <span className="capitalize">{metal}</span>
-              </div>
-              {paymentMethod === "upi" && isAndroid && (
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Payment Method:</span>
-                  <span>UPI</span>
-                </div>
-              )}
-            </div>
-            
-            <div className="flex gap-3 pt-2">
+              
               <Button 
-                type="button" 
-                variant="outline" 
-                className="flex-1 border-gray-700"
-                onClick={() => setStep(1)}
-              >
-                Back
-              </Button>
-              <Button 
-                type="submit" 
-                className="flex-1"
+                onClick={handleBuy} 
+                className="w-full"
                 disabled={isLoading}
               >
-                {isLoading ? 'Processing...' : 'Pay Now'}
+                {isLoading ? (
+                  <div className="flex items-center">
+                    <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    <span>Processing...</span>
+                  </div>
+                ) : (
+                  "Buy"
+                )}
               </Button>
             </div>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 

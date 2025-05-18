@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import UpiPayment from '../components/UpiPayment';
-import { PaymentStatus } from '../services/upiPaymentService';
-import { UpiPaymentService } from '../services/upiPaymentService';
+import { PaymentStatus, UpiPaymentService } from '../services/upiPaymentService';
+import { Capacitor } from '@capacitor/core';
 
 interface OrderDetails {
   id: string;
@@ -32,6 +32,38 @@ const UpiPaymentPage: React.FC = () => {
   const isMobile = upiService.isMobileDevice();
   const supportsUpi = upiService.supportsUpi();
   
+  // Effect to check for pending transaction on page load
+  useEffect(() => {
+    // Check URL params for any payment callback data
+    const urlParams = new URLSearchParams(window.location.search);
+    const status = urlParams.get('status');
+    const txnId = urlParams.get('txnId');
+    
+    if (status && txnId) {
+      // Clear the URL parameters without refreshing the page
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      // Process the status
+      if (status === 'success') {
+        handlePaymentSuccess({
+          status: 'success',
+          transactionId: txnId,
+          transactionRef: '',
+          amount: '',
+          message: 'Payment confirmed via URL callback'
+        });
+      } else if (status === 'failure') {
+        handlePaymentFailure({
+          status: 'failure',
+          transactionId: txnId,
+          transactionRef: '',
+          amount: '',
+          message: 'Payment failed via URL callback'
+        });
+      }
+    }
+  }, []);
+  
   // Handle successful payment
   const handlePaymentSuccess = (data: PaymentStatus) => {
     console.log('Payment successful:', data);
@@ -40,6 +72,10 @@ const UpiPaymentPage: React.FC = () => {
       message: 'Your payment was successful!',
       transactionId: data.transactionId
     });
+    
+    // Clear any pending transaction data
+    localStorage.removeItem('pending_txn_id');
+    localStorage.removeItem('upi_payment_start_time');
     
     // Here you would typically:
     // 1. Update your UI to show success
@@ -55,6 +91,10 @@ const UpiPaymentPage: React.FC = () => {
       message: 'Your payment was unsuccessful. Please try again.',
       transactionId: data.transactionId
     });
+    
+    // Clear any pending transaction data
+    localStorage.removeItem('pending_txn_id');
+    localStorage.removeItem('upi_payment_start_time');
   };
   
   // Handle pending payment
@@ -65,6 +105,17 @@ const UpiPaymentPage: React.FC = () => {
       message: 'Your payment is being processed. Please wait.',
       transactionId: data.transactionId
     });
+  };
+  
+  // Reset the payment process
+  const resetPayment = () => {
+    setPaymentResult(null);
+  };
+  
+  // View transaction history (placeholder function)
+  const viewTransactionHistory = () => {
+    // In a real app, this would navigate to a transaction history page
+    console.log('View transaction history');
   };
   
   // Direct UPI deep link (for testing)
@@ -159,7 +210,8 @@ const UpiPaymentPage: React.FC = () => {
           <li>Click the "Pay via UPI" button</li>
           <li>You'll be redirected to your UPI app (Google Pay, PhonePe, etc.)</li>
           <li>Complete the payment in your UPI app</li>
-          <li>You'll be returned to this page to see your payment status</li>
+          <li>Return to this app to see your payment status</li>
+          <li>The payment will be verified automatically</li>
         </ol>
       </div>
     </div>

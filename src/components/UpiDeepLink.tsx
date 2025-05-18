@@ -1,5 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
+import { Smartphone } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface UpiDeepLinkProps {
   vpa: string;
@@ -18,39 +20,71 @@ const UpiDeepLink: React.FC<UpiDeepLinkProps> = ({
 }) => {
   // Generate UPI deep link URL
   const generateUpiUrl = () => {
-    // Format amount to 2 decimal places
     const formattedAmount = parseFloat(amount.toString()).toFixed(2);
-    
-    // Create the UPI deep link with required parameters
-    const upiUrl = `upi://pay?pa=${encodeURIComponent(vpa)}&pn=${encodeURIComponent(name)}&am=${formattedAmount}&tn=${encodeURIComponent(description)}&cu=INR`;
-    
-    return upiUrl;
+    return `upi://pay?pa=${encodeURIComponent(vpa)}&pn=${encodeURIComponent(name)}&am=${formattedAmount}&tn=${encodeURIComponent(description)}&cu=INR`;
   };
 
   // Handle button click
   const handleUpiClick = () => {
-    const upiUrl = generateUpiUrl();
-    console.log('Opening UPI URL:', upiUrl);
-    
-    // Try to open the UPI URL directly
-    window.location.href = upiUrl;
+    try {
+      const upiUrl = generateUpiUrl();
+      console.log('Opening UPI deep link:', upiUrl);
+      
+      // Check if we already have a pending transaction in progress
+      const pendingTxJson = localStorage.getItem('pendingTransaction');
+      let orderId = `direct_upi_${Date.now()}`;
+      
+      if (pendingTxJson) {
+        try {
+          const pendingTx = JSON.parse(pendingTxJson);
+          // Use the existing order ID if we have one
+          if (pendingTx.orderId) {
+            orderId = pendingTx.orderId;
+            console.log(`Using existing order ID ${orderId} for UPI deep link`);
+          }
+        } catch (e) {
+          console.error('Error parsing pendingTransaction:', e);
+        }
+      }
+      
+      // Store the payment attempt in localStorage
+      localStorage.setItem('last_upi_attempt', JSON.stringify({
+        orderId,
+        vpa,
+        amount,
+        description,
+        timestamp: new Date().toISOString()
+      }));
+      
+      // Set a timeout to show a message if the UPI app doesn't open
+      const timeout = setTimeout(() => {
+        toast("If your UPI app didn't open, you may need to install a UPI app like Google Pay, PhonePe, or BHIM", {
+          duration: 5000
+        });
+      }, 3000);
+      
+      // Navigate to UPI URL
+      window.location.href = upiUrl;
+      
+      // Clear the timeout if the page is still active after navigation
+      return () => clearTimeout(timeout);
+    } catch (error) {
+      console.error('Error opening UPI app:', error);
+      toast.error('Failed to open UPI app. Try the payment button instead.');
+    }
   };
 
   if (!showButton) return null;
 
   return (
-    <div className="mt-4">
-      <Button 
-        variant="default" 
-        className="w-full bg-green-600 hover:bg-green-700 text-white"
-        onClick={handleUpiClick}
-      >
-        Pay with UPI App
-      </Button>
-      <p className="text-xs text-center mt-2 text-gray-400">
-        This will open your UPI payment app directly
-      </p>
-    </div>
+    <Button 
+      variant="outline" 
+      className="w-full flex items-center justify-center gap-2 border-green-600 text-green-500"
+      onClick={handleUpiClick}
+    >
+      <Smartphone size={18} />
+      Open UPI App Directly
+    </Button>
   );
 };
 

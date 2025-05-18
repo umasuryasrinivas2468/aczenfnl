@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { determinePaymentStatus, mapProviderStatusToInternal } from '@/utils/paymentVerificationUtil';
 
 // API credentials - normally would be stored in environment variables
 const API_KEY = "850529145692c9f93773ed2c0a925058";
@@ -235,89 +236,84 @@ export interface TransactionDetails {
 // Function to process payment data for transaction history
 export const getTransactionDetails = async (orderId: string): Promise<TransactionDetails> => {
   try {
-    // Fetch payment data for the order
-    const paymentData = await fetchOrderPayments(orderId);
+    console.log(`Fetching transaction details for order: ${orderId}`);
     
-    // Create base transaction details
+    // Define API URL - use the proxy for consistency with order creation
+    const API_URL = `/api/cashfree/pg/orders/${orderId}`;
+    
+    // Make API call
+    const response = await axios.get(API_URL, {
+      headers: {
+        'x-api-version': '2022-09-01',
+        'x-client-id': API_KEY,
+        'x-client-secret': API_SECRET,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    // Log the response for debugging
+    console.log("Transaction details response:", response.data);
+    
+    // Get payments for this order
+    let paymentsData;
+    try {
+      const paymentsResponse = await fetchOrderPayments(orderId);
+      paymentsData = Array.isArray(paymentsResponse) ? paymentsResponse : [];
+    } catch (error) {
+      console.error('Error fetching payments:', error);
+      paymentsData = [];
+    }
+    
+    // Combine order data with payment data for verification
+    const orderData = response.data;
+    const verificationData = [
+      { order_status: orderData.order_status },
+      ...paymentsData.map((payment: any) => ({ payment_status: payment.payment_status }))
+    ];
+    
+    // Determine the status using the verification util
+    const paymentStatus = determinePaymentStatus(verificationData);
+    
+    // Map to our internal status format
+    const status = paymentStatus === 'Success' ? 'SUCCESS' : 
+                   paymentStatus === 'Pending' ? 'PENDING' : 'FAILURE';
+    
+    // Extract customer details if available
+    const customerDetails = orderData.customer_details || {};
+    
+    // Find a payment ID if one exists
+    const paymentId = paymentsData.length > 0 ? paymentsData[0].cf_payment_id : undefined;
+    
+    // Build the transaction details
     const transactionDetails: TransactionDetails = {
       orderId: orderId,
-      amount: 0,
-      status: 'PENDING',
-      date: new Date(),
+      amount: parseFloat(orderData.order_amount || '0'),
+      status: status,
+      date: new Date(orderData.created_at || Date.now()),
+      paymentId: paymentId,
+      paymentMethod: paymentsData.length > 0 ? paymentsData[0].payment_method : undefined,
+      customerDetails: {
+        name: customerDetails.customer_name,
+        phone: customerDetails.customer_phone,
+        email: customerDetails.customer_email
+      },
+      failureReason: status === 'FAILURE' ? paymentsData.length > 0 ? paymentsData[0].error_details : 'Payment failed' : undefined
     };
     
-    // Check if payment data exists and is not empty
-    if (!paymentData || 
-        (Array.isArray(paymentData) && paymentData.length === 0) || 
-        Object.keys(paymentData).length === 0) {
-      // If no payment data or empty array response, mark as failure
-      transactionDetails.status = 'FAILURE';
-      transactionDetails.failureReason = 'No payment data found';
-      return transactionDetails;
-    }
-    
-    // Convert to array if not already
-    const transactions = Array.isArray(paymentData) ? paymentData : [paymentData];
-    
-    // Apply exact status logic from user's code
-    if (transactions.filter(tx => tx.payment_status === "SUCCESS").length > 0) {
-      // If any transaction is SUCCESS, mark as success
-      transactionDetails.status = 'SUCCESS';
-      
-      // Find the successful transaction to get details
-      const successTx = transactions.find(tx => tx.payment_status === "SUCCESS");
-      if (successTx) {
-        transactionDetails.amount = successTx.payment_amount || 0;
-        transactionDetails.paymentId = successTx.cf_payment_id || successTx.payment_id;
-        transactionDetails.paymentMethod = successTx.payment_method?.type || 'Unknown';
-        
-        // Add customer details if available
-        if (successTx.customer_details) {
-          transactionDetails.customerDetails = {
-            name: successTx.customer_details.customer_name,
-            phone: successTx.customer_details.customer_phone,
-            email: successTx.customer_details.customer_email
-          };
-        }
-      }
-    } else if (transactions.filter(tx => tx.payment_status === "PENDING").length > 0) {
-      // If any transaction is PENDING (and none are SUCCESS), mark as pending
-      transactionDetails.status = 'PENDING';
-      
-      // Find a pending transaction to get details
-      const pendingTx = transactions.find(tx => tx.payment_status === "PENDING");
-      if (pendingTx) {
-        transactionDetails.amount = pendingTx.payment_amount || 0;
-        transactionDetails.paymentId = pendingTx.cf_payment_id || pendingTx.payment_id;
-      }
-    } else {
-      // If no SUCCESS or PENDING transactions, mark as failure
-      transactionDetails.status = 'FAILURE';
-      
-      // Find a transaction to get details and failure reason
-      if (transactions.length > 0) {
-        const latestTx = transactions[0];
-        transactionDetails.amount = latestTx.payment_amount || 0;
-        transactionDetails.paymentId = latestTx.cf_payment_id || latestTx.payment_id;
-        transactionDetails.failureReason = latestTx.payment_message || 'Payment not successful';
-      } else {
-        transactionDetails.failureReason = 'No successful or pending payments found';
-      }
-    }
-    
-    // Log the determined status for debugging
-    console.log(`Order ${orderId} status determined as: ${transactionDetails.status}`);
-    
     return transactionDetails;
-  } catch (error) {
-    console.error('Error processing transaction details:', error);
-    // Return basic failure transaction
+  } catch (error: any) {
+    console.error('Error getting transaction details:', 
+      error.response ? error.response.data : error.message);
+    
+    // Return a basic error response
     return {
       orderId: orderId,
       amount: 0,
       status: 'FAILURE',
       date: new Date(),
-      failureReason: 'Error fetching transaction data'
+      failureReason: error.response ? 
+        (error.response.data ? error.response.data.message : 'API error') : 
+        error.message
     };
   }
 }; 
