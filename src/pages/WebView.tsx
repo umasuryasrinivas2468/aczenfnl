@@ -32,6 +32,26 @@ const WebView: React.FC = () => {
     trains: {
       url: 'https://www.irctc.co.in/nget/train-search',
       title: 'Book Train Tickets'
+    },
+    loans: {
+      url: 'https://choiceconnect.in/loans/QzAwNDY3NTE=?lead_source=Y29ubmVjdF9yZWZlcnJhbF9saW5r',
+      title: 'Loans'
+    },
+    insurance: {
+      url: 'https://choiceconnect.in/insurance/QzAwNDY3NTE=?lead_source=Y29ubmVjdF9yZWZlcnJhbF9saW5r',
+      title: 'Insurance'
+    },
+    credit: {
+      url: 'https://choiceconnect.in/credit-score/QzAwNDY3NTE=?lead_source=Y29ubmVjdF9yZWZlcnJhbF9saW5r',
+      title: 'Credit Score'
+    },
+    savings: {
+      url: 'https://choiceconnect.in/savings/QzAwNDY3NTE=?lead_source=Y29ubmVjdF9yZWZlcnJhbF9saW5r',
+      title: 'Savings'
+    },
+    metro: {
+      url: 'https://www.metro.com/',
+      title: 'Metro Tickets'
     }
   };
 
@@ -41,11 +61,18 @@ const WebView: React.FC = () => {
     const serviceType = searchParams.get('service') || '';
     
     // If service info is in location state, use that
-    if (location.state && location.state.url) {
-      setUrl(location.state.url);
-      setTitle(location.state.title || 'Web View');
-      setLoading(false);
-      return;
+    if (location.state) {
+      if (location.state.url) {
+        setUrl(location.state.url);
+        setTitle(location.state.title || location.state.service || 'Web View');
+        setLoading(false);
+        return;
+      } else if (location.state.service && serviceUrls[location.state.service]) {
+        setUrl(serviceUrls[location.state.service].url);
+        setTitle(serviceUrls[location.state.service].title);
+        setLoading(false);
+        return;
+      }
     }
     
     // If service type is provided and exists in our mapping

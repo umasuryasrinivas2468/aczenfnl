@@ -1,73 +1,166 @@
-# Welcome to your Lovable project
+# Cashfree UPI Intent Integration for Capacitor
 
-## Project info
+This repository demonstrates how to implement Cashfree's UPI Intent payment flow in a Capacitor mobile application. UPI Intent provides a seamless payment experience by directly opening UPI apps installed on the user's device.
 
-**URL**: https://lovable.dev/projects/d3e274db-dbf0-4510-b86b-54765d204ad4
+## Features
 
-## How can I edit this code?
+- Direct integration with Cashfree's payment gateway
+- UPI Intent flow for better mobile payment experience
+- Deep link handling for payment callbacks
+- Works with all popular UPI apps (Google Pay, PhonePe, Paytm, etc.)
+- Configurable app URL scheme for deep linking
 
-There are several ways of editing your application.
+## Prerequisites
 
-**Use Lovable**
+- Cashfree merchant account with API credentials
+- Capacitor-based mobile application
+- Backend server to create payment orders and generate payment session IDs
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/d3e274db-dbf0-4510-b86b-54765d204ad4) and start prompting.
+## Implementation Steps
 
-Changes made via Lovable will be committed automatically to this repo.
+### 1. Install Dependencies
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```bash
+npm install @capacitor/core @capacitor/app @cashfreepayments/cashfree-js
 ```
 
-**Edit a file directly in GitHub**
+### 2. Configure Capacitor for Deep Linking
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+#### In `capacitor.config.ts`:
 
-**Use GitHub Codespaces**
+```typescript
+import { CapacitorConfig } from '@capacitor/cli';
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+const config: CapacitorConfig = {
+  appId: 'com.yourapp.id',
+  appName: 'Your App',
+  webDir: 'dist',
+  server: {
+    androidScheme: 'yourappscheme'
+  }
+};
 
-## What technologies are used for this project?
+export default config;
+```
 
-This project is built with:
+#### For Android (`AndroidManifest.xml`):
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Add the following inside the `<activity>` tag:
 
-## How can I deploy this project?
+```xml
+<intent-filter>
+  <action android:name="android.intent.action.VIEW" />
+  <category android:name="android.intent.category.DEFAULT" />
+  <category android:name="android.intent.category.BROWSABLE" />
+  <data android:scheme="yourappscheme" android:host="cashfree-callback" />
+</intent-filter>
+```
 
-Simply open [Lovable](https://lovable.dev/projects/d3e274db-dbf0-4510-b86b-54765d204ad4) and click on Share -> Publish.
+#### For iOS (`Info.plist`):
 
-## Can I connect a custom domain to my Lovable project?
+Add the following to support UPI apps:
 
-Yes, you can!
+```xml
+<key>LSApplicationQueriesSchemes</key>
+<array>
+  <string>phonepe</string>
+  <string>tez</string>
+  <string>paytmmp</string>
+  <string>bhim</string>
+  <string>credpay</string>
+</array>
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleURLSchemes</key>
+    <array>
+      <string>yourappscheme</string>
+    </array>
+  </dict>
+</array>
+```
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+### 3. Create Order on Backend
+
+Your backend should create an order using Cashfree's API and return the `order_id` and `payment_session_id` to your frontend.
+
+Example backend endpoint:
+
+```javascript
+app.post('/api/create-order', async (req, res) => {
+  try {
+    const { amount, userData } = req.body;
+    
+    // Create order with Cashfree API
+    const orderData = await cashfree.createOrder({
+      order_amount: amount,
+      order_currency: "INR",
+      customer_details: {
+        customer_id: userData.customerId,
+        customer_name: userData.customerName,
+        customer_email: userData.customerEmail,
+        customer_phone: userData.customerPhone
+      }
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        order_id: orderData.order_id,
+        payment_session_id: orderData.payment_session_id
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+```
+
+### 4. Implement UPI Intent Checkout in Frontend
+
+Use the `CashfreeMobileCheckout` component to handle UPI Intent payments:
+
+```jsx
+<CashfreeMobileCheckout
+  paymentSessionId={paymentSessionId}
+  orderId={orderId}
+  amount={amount}
+  onSuccess={handlePaymentSuccess}
+  onFailure={handlePaymentFailure}
+  buttonText="Pay with UPI"
+  appScheme="yourappscheme"
+/>
+```
+
+### 5. Handle Deep Link Callbacks
+
+The `CashfreeMobileCheckout` component automatically sets up listeners for deep link callbacks using Capacitor's App plugin. When a payment is completed, the UPI app will redirect back to your app using the configured URL scheme.
+
+## Key Configuration Parameters
+
+- `paymentMethod: "upi"` - Specifies UPI as the payment method
+- `upiMode: "intent"` - Forces UPI Intent flow for better mobile experience
+- `redirectTarget: "mobile"` - Required for Capacitor apps to open UPI apps
+- `redirectUrl: "yourappscheme://cashfree-callback"` - Deep link URL for payment callbacks
+
+## Testing
+
+1. Run your app on a physical device (UPI Intent doesn't work in emulators)
+2. Create an order and initiate payment
+3. Select a UPI app from the list
+4. Complete the payment in the UPI app
+5. Verify that you're redirected back to your app with the payment status
+
+## Resources
+
+- [Cashfree React Native UPI Intent Documentation](https://www.cashfree.com/docs/payments/online/mobile/react-native#upi-intent-checkout)
+- [Capacitor Deep Linking Documentation](https://capacitorjs.com/docs/apis/app#handling-deep-links)
+- [Cashfree UPI Intent Support for JS SDK](https://www.cashfree.com/docs/payments/online/mobile/misc/upi_intent_support_js_sdk)
+
+## License
+
+MIT

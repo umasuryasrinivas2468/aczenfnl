@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowRight, Share2, Download, Home, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { generateReceipt } from '@/services/upiIntentService';
 import PaymentReceipt from '@/components/PaymentReceipt';
 import { toast } from 'sonner';
 import { useUser } from '@clerk/clerk-react';
 import { supabase } from '@/lib/supabase';
 import { AlertTriangle, CheckCircle } from 'lucide-react';
+import { checkPaymentStatus } from '@/services/paymentService';
 
 // Receipt type
 interface ReceiptData {
@@ -39,76 +39,58 @@ const PaymentSuccess: React.FC = () => {
         setLoading(true);
         
         console.log("Fetching transaction details...");
-        console.log("Location state:", location.state);
         
-        // Check if we have data in location state
-        if (location.state && location.state.orderId) {
-          const { orderId, amount, metalType: metal, timestamp } = location.state;
-          console.log(`Found orderId ${orderId} in location state`);
-          
-          // Set metal type
-          if (metal) {
-            setMetalType(metal);
-          }
-          
-          // Create a simple receipt from state data
-          setReceiptData({
-            orderId,
-            amount,
-            status: 'PAID',
-            date: timestamp || new Date().toISOString(),
-            paymentMethod: 'UPI',
-            customerName: user?.fullName || 'Customer',
-            transactionId: orderId
-          });
-          
-          // Try to update investment if needed
-      if (!investmentUpdated) {
-            await updateInvestmentTotal(orderId, amount, metal, user.id);
-        setInvestmentUpdated(true);
-      }
-    } else {
-          // Try to get from URL params
-          const searchParams = new URLSearchParams(location.search);
-          const orderId = searchParams.get('order_id');
-          const metal = searchParams.get('metal_type') || 'gold';
+        // Get orderId from URL params
+        const searchParams = new URLSearchParams(location.search);
+        const orderId = searchParams.get('orderId');
+        const metal = searchParams.get('metal') || 'gold';
       
-      if (orderId) {
+        if (orderId) {
+          // Verify payment with our API
+          try {
+            const result = await checkPaymentStatus(orderId);
+            console.log("Payment status check result:", result);
+            
+            // Only proceed if confirmed payment is successful
+            if (result.status !== "SUCCESS") {
+              console.warn("Payment not confirmed:", result);
+              toast.error('Payment verification pending');
+              // Still continue to show receipt in this case, but with pending status
+            }
+            
             // Set metal type if available
             if (metal && (metal === 'gold' || metal === 'silver')) {
               setMetalType(metal as 'gold' | 'silver');
             }
             
-            // Try to get pending transaction from localStorage
-            const pendingTxJson = localStorage.getItem('pendingTransaction');
-            if (pendingTxJson) {
-              try {
-                const pendingTx = JSON.parse(pendingTxJson);
-                if (pendingTx.orderId === orderId) {
-                  setReceiptData({
-                    orderId,
-                    amount: pendingTx.amount,
-          status: 'PAID',
-                    date: pendingTx.timestamp || new Date().toISOString(),
-                    paymentMethod: pendingTx.paymentMethod || 'UPI',
-                    customerName: user?.fullName || 'Customer',
-                    transactionId: orderId
-                  });
-        
-        // Update investments if not already updated
-        if (!investmentUpdated) {
-                    await updateInvestmentTotal(orderId, pendingTx.amount, metal as 'gold' | 'silver', user.id);
-                    setInvestmentUpdated(true);
-                  }
-                  
-                  // Clear the pending transaction
-                  localStorage.removeItem('pendingTransaction');
-                }
-              } catch (e) {
-                console.error('Error parsing pendingTransaction:', e);
-              }
-            } else {
-              // Check database directly
+            const transactionData = result.transaction;
+            
+            // Create receipt from transaction data
+            setReceiptData({
+              orderId: transactionData.order_id,
+              amount: transactionData.amount,
+              status: result.status === 'SUCCESS' ? 'PAID' : 'PENDING',
+              date: transactionData.created_at || new Date().toISOString(),
+              paymentMethod: transactionData.payment_method || 'CUSTOM',
+              customerName: user?.fullName || 'Customer',
+              transactionId: transactionData.payment_id || transactionData.order_id
+            });
+            
+            // Update investment if successful payment
+            if (!investmentUpdated && result.status === 'SUCCESS') {
+              await updateInvestmentTotal(
+                transactionData.order_id,
+                transactionData.amount,
+                metal as 'gold' | 'silver',
+                user.id
+              );
+              setInvestmentUpdated(true);
+            }
+          } catch (err) {
+            console.error('Error verifying payment:', err);
+            
+            // Fallback to checking database directly
+            try {
               const { data, error } = await supabase
                 .from('transactions')
                 .select('*')
@@ -121,12 +103,12 @@ const PaymentSuccess: React.FC = () => {
                   amount: data.amount,
                   status: data.status === 'completed' ? 'PAID' : data.status,
                   date: data.created_at,
-                  paymentMethod: data.payment_method || 'UPI',
+                  paymentMethod: data.payment_method || 'CUSTOM',
                   customerName: user?.fullName || 'Customer',
                   transactionId: data.payment_id || data.order_id
                 });
                 
-                // Update investment if needed
+                // Update investment if successful payment
                 if (!investmentUpdated && data.status === 'completed') {
                   await updateInvestmentTotal(
                     data.order_id,
@@ -137,38 +119,27 @@ const PaymentSuccess: React.FC = () => {
                   setInvestmentUpdated(true);
                 }
               } else {
-                // As a last resort, try the receipt API
-                try {
-                  const receipt = await generateReceipt(orderId);
-                  setReceiptData(receipt);
-                  
-                  // Still update investment if possible
-                  if (!investmentUpdated && receipt.amount > 0) {
-                    await updateInvestmentTotal(orderId, receipt.amount, metal as 'gold' | 'silver', user.id);
-          setInvestmentUpdated(true);
-                  }
-                } catch (receiptError) {
-                  console.error('Error generating receipt:', receiptError);
-                  toast.error('Could not find transaction details');
-                  
-                  // Create minimal receipt as fallback
-                  setReceiptData({
-                    orderId,
-                    amount: 0,
-                    status: 'PENDING',
-                    date: new Date().toISOString(),
-                    paymentMethod: 'UPI',
-                    customerName: user?.fullName || 'Customer',
-                    transactionId: orderId
-                  });
-                }
+                // Create minimal receipt as fallback
+                toast.error('Transaction details incomplete');
+                setReceiptData({
+                  orderId,
+                  amount: 0,
+                  status: 'PENDING',
+                  date: new Date().toISOString(),
+                  paymentMethod: 'CUSTOM',
+                  customerName: user?.fullName || 'Customer',
+                  transactionId: orderId
+                });
               }
+            } catch (dbError) {
+              console.error('Error fetching from database:', dbError);
+              toast.error('Could not retrieve transaction details');
             }
-          } else {
-            // No order ID found, show error
-            toast.error('Transaction details not found');
-            setTimeout(() => navigate('/dashboard'), 2000);
           }
+        } else {
+          // No order ID found, show error
+          toast.error('Transaction ID not found');
+          setTimeout(() => navigate('/'), 2000);
         }
       } catch (error) {
         console.error('Error fetching transaction details:', error);
@@ -191,79 +162,62 @@ const PaymentSuccess: React.FC = () => {
     userId: string
   ) => {
     try {
-      console.log(`Updating investment for ${metalType}, amount: ${amount}`);
-      
-      // 1. Update transaction status to completed if not already
-      const { data: txData, error: txError } = await supabase
-        .from('transactions')
-        .select('status')
-        .eq('order_id', orderId)
-        .single();
-      
-      if (!txError && txData && txData.status !== 'completed') {
-        await supabase
-          .from('transactions')
-          .update({
-            status: 'completed',
-            updated_at: new Date().toISOString()
-          })
-          .eq('order_id', orderId);
-      }
-      
-      // 2. Get current investment record
-      const { data: investmentData, error: fetchError } = await supabase
+      // First, check if user has existing investments
+      const { data: existingInvestment, error: fetchError } = await supabase
         .from('investments')
         .select('*')
         .eq('user_id', userId)
-        .eq('metal_type', metalType)
         .single();
       
       if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error('Error fetching investment:', fetchError);
+        // Error other than "no rows returned"
+        console.error('Error fetching existing investment:', fetchError);
+        return false;
       }
       
-      // Calculate weight - use default price if not available
-      let currentPrice = metalType === 'gold' ? 5500 : 70;
-      const weight = amount / currentPrice;
+      // Get current metal prices
+      const metalPrice = metalType === 'gold' ? 6300 : 75; // Default prices if API fails
       
-      // 3. Update or create investment record
-      if (investmentData) {
+      // Calculate weight in grams
+      const weight = amount / metalPrice;
+      
+      if (existingInvestment) {
         // Update existing investment
         const { error: updateError } = await supabase
           .from('investments')
           .update({
-            amount: investmentData.amount + amount,
-            weight_in_grams: (investmentData.weight_in_grams || 0) + weight,
+            [`${metalType}_amount`]: existingInvestment[`${metalType}_amount`] + amount,
+            [`${metalType}_weight`]: existingInvestment[`${metalType}_weight`] + weight,
             updated_at: new Date().toISOString()
           })
-          .eq('id', investmentData.id);
+          .eq('user_id', userId);
         
         if (updateError) {
           console.error('Error updating investment:', updateError);
-        } else {
-          console.log('Updated existing investment record');
+          return false;
         }
       } else {
         // Create new investment record
         const { error: insertError } = await supabase
           .from('investments')
-          .insert({
+          .insert([{
             user_id: userId,
-            metal_type: metalType,
-            amount: amount,
-            weight_in_grams: weight,
+            [`${metalType}_amount`]: amount,
+            [`${metalType}_weight`]: weight,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
-          });
+          }]);
         
         if (insertError) {
           console.error('Error creating investment:', insertError);
-        } else {
-          console.log('Created new investment record');
+          return false;
         }
       }
       
-      // 4. Update local storage for client-side access
+      // Successfully updated investment
+      console.log(`Investment updated for ${metalType}:`, { amount, weight });
+      
+      // Also update local storage for offline access
       updateLocalStorage(userId, orderId, amount, metalType, weight);
       
       return true;
@@ -273,7 +227,7 @@ const PaymentSuccess: React.FC = () => {
     }
   };
 
-  // Update local storage
+  // Update local storage with investment data
   const updateLocalStorage = (
     userId: string,
     orderId: string,
@@ -282,64 +236,41 @@ const PaymentSuccess: React.FC = () => {
     weight: number
   ) => {
     try {
-      const userInvestmentsStr = localStorage.getItem('userInvestments');
+      // Get existing data
+      const storageKey = `investments_${userId}`;
+      const existingDataJson = localStorage.getItem(storageKey);
       
-      if (userInvestmentsStr) {
-        try {
-          const userInvestments = JSON.parse(userInvestmentsStr);
+      if (existingDataJson) {
+        // Update existing data
+        const existingData = JSON.parse(existingDataJson);
         
-        // Create transaction record
-        const transaction = {
-            id: `tx_${Date.now()}`,
-          type: metalType,
-          amount: amount,
-            date: new Date().toISOString(),
-          status: 'completed',
-            orderId: orderId
-          };
-          
-          // Check if transaction already exists
-          const existingTransaction = userInvestments.transactions.find(
-            (tx: any) => tx.orderId === orderId
-          );
-          
-          if (!existingTransaction) {
-            // Update investments object
-        const updatedInvestments = {
-              ...userInvestments,
-              userId: userId, // Ensure user ID is set
-              totalInvestment: userInvestments.totalInvestment + amount,
-          investments: {
-                ...userInvestments.investments,
-            [metalType]: {
-                  ...userInvestments.investments[metalType],
-                  amount: userInvestments.investments[metalType].amount + amount,
-                  weight: userInvestments.investments[metalType].weight + weight
-                }
-              },
-              transactions: [transaction, ...userInvestments.transactions]
-            };
-            
-            // Save back to localStorage
-        localStorage.setItem('userInvestments', JSON.stringify(updatedInvestments));
-            console.log('Updated local investments storage');
-          }
-        } catch (error) {
-          console.error('Error updating local storage investments:', error);
-          
-          // Create new storage if parsing failed
-          createDefaultStorage(userId, orderId, amount, metalType, weight);
-        }
+        // Update total amounts
+        existingData.totals[`${metalType}_amount`] = 
+          (existingData.totals[`${metalType}_amount`] || 0) + amount;
+        existingData.totals[`${metalType}_weight`] = 
+          (existingData.totals[`${metalType}_weight`] || 0) + weight;
+        
+        // Add new transaction
+        existingData.transactions.push({
+          orderId,
+          amount,
+          metalType,
+          weight,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Store updated data
+        localStorage.setItem(storageKey, JSON.stringify(existingData));
       } else {
-        // Create default storage if none exists
+        // Create new storage
         createDefaultStorage(userId, orderId, amount, metalType, weight);
       }
     } catch (error) {
-      console.error('Error in updateLocalStorage:', error);
+      console.error('Error updating local storage:', error);
     }
   };
 
-  // Create default local storage
+  // Create default storage structure
   const createDefaultStorage = (
     userId: string,
     orderId: string,
@@ -347,163 +278,177 @@ const PaymentSuccess: React.FC = () => {
     metalType: 'gold' | 'silver',
     weight: number
   ) => {
-    const defaultInvestments = {
+    const storageKey = `investments_${userId}`;
+    
+    const defaultData = {
       userId,
-      totalInvestment: amount,
-      investments: {
-        gold: {
-          amount: metalType === 'gold' ? amount : 0,
-          weight: metalType === 'gold' ? weight : 0
-        },
-        silver: {
-          amount: metalType === 'silver' ? amount : 0,
-          weight: metalType === 'silver' ? weight : 0
-        }
+      totals: {
+        gold_amount: metalType === 'gold' ? amount : 0,
+        gold_weight: metalType === 'gold' ? weight : 0,
+        silver_amount: metalType === 'silver' ? amount : 0,
+        silver_weight: metalType === 'silver' ? weight : 0
       },
       transactions: [
         {
-          id: `tx_${Date.now()}`,
-          type: metalType,
-          amount: amount,
-          date: new Date().toISOString(),
-          status: 'completed',
-          orderId: orderId
+          orderId,
+          amount,
+          metalType,
+          weight,
+          timestamp: new Date().toISOString()
         }
-      ]
+      ],
+      lastUpdated: new Date().toISOString()
     };
     
-    localStorage.setItem('userInvestments', JSON.stringify(defaultInvestments));
-    console.log('Created default userInvestments in localStorage');
+    localStorage.setItem(storageKey, JSON.stringify(defaultData));
   };
 
-  // Handle share receipt
   const handleShare = async () => {
+    if (!receiptData) return;
+    
     try {
-      if (!receiptData) return;
-      
+      // Create data to share
       const shareData = {
         title: 'Payment Receipt',
-        text: `Successfully invested ₹${receiptData.amount} in ${metalType}. Transaction ID: ${receiptData.transactionId}`,
-        url: window.location.href,
+        text: `Payment of ₹${receiptData.amount} successful. Order ID: ${receiptData.orderId}`,
+        url: window.location.href
       };
       
+      // Check if the Web Share API is available
       if (navigator.share) {
         await navigator.share(shareData);
       } else {
-        await navigator.clipboard.writeText(shareData.text);
+        // Fallback for browsers that don't support the Web Share API
+        navigator.clipboard.writeText(shareData.text + '\n' + shareData.url);
         toast.success('Receipt details copied to clipboard');
       }
     } catch (error) {
       console.error('Error sharing receipt:', error);
-      toast.error('Failed to share receipt');
+      toast.error('Could not share receipt');
     }
   };
 
-  // Handle download receipt
   const handleDownload = () => {
-    // Placeholder - You can implement PDF generation here
-    toast.success('Receipt will be downloaded soon');
+    if (!receiptData) return;
+    
+    try {
+      // Get the receipt element
+      const receiptElement = document.getElementById('payment-receipt');
+      if (!receiptElement) {
+        throw new Error('Receipt element not found');
+      }
+      
+      // Use html2canvas to convert to image (assuming it's imported)
+      import('html2canvas').then((html2canvas) => {
+        html2canvas.default(receiptElement).then(canvas => {
+          const imgData = canvas.toDataURL('image/png');
+          
+          // Create download link
+          const link = document.createElement('a');
+          link.download = `Receipt-${receiptData.orderId}.png`;
+          link.href = imgData;
+          link.click();
+        });
+      });
+    } catch (error) {
+      console.error('Error downloading receipt:', error);
+      toast.error('Could not download receipt');
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-green-900/40 to-gray-900 text-white">
-      <div className="max-w-md mx-auto px-4 py-8">
-        {/* Top navigation and close button */}
-        <div className="flex justify-between items-center mb-8">
+    <div className="min-h-screen bg-black text-white pt-6 pb-20">
+      <div className="max-w-md mx-auto px-4">
+        <div className="flex items-center mb-8">
           <Button 
             variant="ghost" 
-            size="icon"
+            size="icon" 
             onClick={() => navigate('/')}
-            className="text-gray-400 hover:text-white"
+            className="mr-2 text-white"
           >
             <ArrowLeft size={24} />
           </Button>
-          <div className="flex space-x-4">
-            <Button 
-              variant="ghost" 
-              size="icon"
-              className="text-gray-400 hover:text-white"
-            >
-              <Share2 size={22} />
-            </Button>
-          </div>
+          <h1 className="text-2xl font-bold text-white">Payment Successful</h1>
         </div>
         
         {loading ? (
-          <div className="flex flex-col items-center justify-center h-60">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-green-500 mb-4"></div>
-            <p className="text-gray-400">Loading transaction details...</p>
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="h-12 w-12 border-4 border-t-green-500 border-r-green-500 border-b-transparent border-l-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-gray-400">Loading payment details...</p>
           </div>
-        ) : !receiptData ? (
-          <div className="flex flex-col items-center justify-center h-60">
-            <AlertTriangle className="h-12 w-12 text-yellow-500 mb-4" />
-            <p className="text-gray-400">Transaction details not found</p>
-            <Button 
-              variant="outline"
-              className="mt-4 border-green-600 text-green-400 hover:bg-green-900/20"
-              onClick={() => navigate('/')}
-            >
-              Return Home
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Amount and Transaction Status */}
-            <div className="bg-gradient-to-b from-green-900/40 to-gray-900 rounded-xl p-6 text-center relative overflow-hidden">
-              <div className="relative z-10">
-                <h2 className="text-4xl font-bold mb-1">₹{receiptData.amount.toFixed(2)}</h2>
-                <p className="text-gray-400 mb-6">from Cashfree Payments</p>
-                
-                <div className="inline-block bg-black/30 px-4 py-2 rounded-lg mb-6">
-                  <p className="text-sm uppercase tracking-wide text-green-400">CASHFREE</p>
-                </div>
-                
-                <div className="mx-auto w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-2">
-                  <CheckCircle className="h-10 w-10 text-white" />
-                </div>
-                <p className="text-xl font-medium text-green-400 mb-1">Received</p>
-                <p className="text-sm text-gray-400 mb-4">
-                  {receiptData.date ? new Date(receiptData.date).toLocaleString('en-IN', {
-                    day: '2-digit',
-                    month: 'long',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  }) : 'Date not available'}
-                </p>
-                
-                <div className="flex items-center justify-center space-x-2">
-                  <p className="text-sm text-gray-400">TXN ID: {receiptData.transactionId || receiptData.orderId}</p>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400">
-                    <Download size={14} />
-                  </Button>
-                </div>
+        ) : receiptData ? (
+          <>
+            <div className="bg-green-900/20 rounded-xl border border-green-700/30 p-4 mb-6 flex items-center">
+              <div className="bg-green-600 rounded-full p-2 mr-4">
+                <CheckCircle size={24} />
               </div>
-              
-              {/* Decorative dots */}
-              <div className="absolute top-10 left-4 w-2 h-2 bg-green-400/30 rounded-full"></div>
-              <div className="absolute top-20 right-10 w-2 h-2 bg-green-400/30 rounded-full"></div>
-              <div className="absolute bottom-10 left-20 w-2 h-2 bg-green-400/30 rounded-full"></div>
-              <div className="absolute right-6 top-40 w-2 h-2 bg-green-400/30 rounded-full"></div>
+              <div>
+                <h2 className="font-semibold text-green-400">Payment Complete</h2>
+                <p className="text-sm text-gray-300">
+                  Your {metalType} purchase has been confirmed
+                </p>
+              </div>
             </div>
             
-            {/* Buttons */}
-            <div className="flex flex-col space-y-3">
-              <Button 
-                className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white py-6"
-                onClick={() => navigate('/history')}
-              >
-                View Transaction History
-              </Button>
-              
+            <div className="bg-gray-900 rounded-xl p-6 mb-6" id="payment-receipt">
+              <PaymentReceipt 
+                orderId={receiptData.orderId}
+                amount={receiptData.amount}
+                date={receiptData.date}
+                status={receiptData.status}
+                customerName={receiptData.customerName}
+                paymentMethod={receiptData.paymentMethod}
+                metalType={metalType}
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 mb-8">
               <Button 
                 variant="outline" 
-                className="w-full border-gray-700 text-gray-300 hover:bg-gray-800 py-6"
-                onClick={() => navigate('/')}
+                className="border-gray-700 text-white hover:bg-gray-800"
+                onClick={handleShare}
               >
-                Return to Home
+                <Share2 size={18} className="mr-2" />
+                Share Receipt
+              </Button>
+              <Button 
+                variant="outline" 
+                className="border-gray-700 text-white hover:bg-gray-800"
+                onClick={handleDownload}
+              >
+                <Download size={18} className="mr-2" />
+                Download
               </Button>
             </div>
+            
+            <div className="flex flex-col space-y-4">
+              <Button
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={() => navigate('/dashboard')}
+              >
+                <Home size={18} className="mr-2" />
+                Go to Dashboard
+              </Button>
+              <Button 
+                variant="outline" 
+                className="border-gray-700 text-white hover:bg-gray-800"
+                onClick={() => navigate('/savings')}
+              >
+                <ArrowRight size={18} className="mr-2" />
+                View Investments
+              </Button>
+            </div>
+          </>
+        ) : (
+          <div className="bg-red-900/20 rounded-xl border border-red-700/30 p-6 flex flex-col items-center">
+            <AlertTriangle size={48} className="text-red-400 mb-4" />
+            <h2 className="text-xl font-semibold text-white mb-2">Transaction Not Found</h2>
+            <p className="text-gray-400 text-center mb-6">
+              We couldn't find details for this payment.
+            </p>
+            <Button onClick={() => navigate('/')}>
+              Return Home
+            </Button>
           </div>
         )}
       </div>

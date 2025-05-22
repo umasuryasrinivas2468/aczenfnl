@@ -5,8 +5,8 @@ const config: CapacitorConfig = {
   appName: 'wealth-horizon-bloom',
   webDir: 'dist',
   server: {
-    androidScheme: 'https',
-    url: 'http://192.168.1.3:8080/', 
+    androidScheme: 'wealthhorizon',
+    url: 'http://192.168.1.2:8080/', 
     cleartext: true
   },
   android: {

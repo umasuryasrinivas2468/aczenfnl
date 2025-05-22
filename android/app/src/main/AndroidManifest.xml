@@ -22,6 +22,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="wealthhorizon" />
+            </intent-filter>
+
         </activity>
 
         <provider
@@ -36,6 +43,35 @@
     </application>
 
     <!-- Permissions -->
-
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    
+    <!-- Required for UPI Intent to work properly -->
+    <queries>
+        <!-- Google Pay -->
+        <package android:name="com.google.android.apps.nbu.paisa.user" />
+        
+        <!-- PhonePe -->
+        <package android:name="com.phonepe.app" />
+        
+        <!-- Paytm -->
+        <package android:name="net.one97.paytm" />
+        
+        <!-- BHIM -->
+        <package android:name="in.org.npci.upiapp" />
+        
+        <!-- Amazon Pay -->
+        <package android:name="in.amazon.mShop.android.shopping" />
+        
+        <!-- WhatsApp -->
+        <package android:name="com.whatsapp" />
+        
+        <!-- Other UPI apps -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="upi" />
+        </intent>
+    </queries>
+
 </manifest>

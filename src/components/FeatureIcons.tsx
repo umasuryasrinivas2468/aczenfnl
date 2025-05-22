@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { Card, CardContent } from './ui/card';
 import { 
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Wallet,
+  Shield,
+  CreditCard,
+  PiggyBank
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -11,7 +15,6 @@ const FeatureIcons: React.FC = () => {
   const [showLoans, setShowLoans] = useState(true);
   const [showInsurance, setShowInsurance] = useState(false);
 
-  // Loan options
   const loanOptions = [
     {
       title: 'Solar Installation',
@@ -27,7 +30,6 @@ const FeatureIcons: React.FC = () => {
     }
   ];
 
-  // Insurance options
   const insuranceOptions = [
     {
       title: 'Accident Care Plus',
@@ -55,130 +57,131 @@ const FeatureIcons: React.FC = () => {
     }
   ];
 
-  // First row: Main financial features
   const mainFeatures = [
     {
       title: 'Loans',
       subtitle: 'Pre-Approved',
-      color: 'bg-purple-500 text-white',
-      route: '/loans'
+      color: 'bg-purple-500',
+      route: '/webview',
+      params: { service: 'loans', url: 'https://choiceconnect.in/loans/QzAwNDY3NTE=?lead_source=Y29ubmVjdF9yZWZlcnJhbF9saW5r' },
+      icon: Wallet
     },
     {
       title: 'Insurance',
-      subtitle: 'Motor, Health and more',
-      color: 'bg-red-500 text-white',
-      route: '/insurance'
+      subtitle: 'Motor, Health and more', 
+      color: 'bg-red-500',
+      route: '/webview',
+      params: { service: 'insurance', url: 'https://choiceconnect.in/insurance/QzAwNDY3NTE=?lead_source=Y29ubmVjdF9yZWZlcnJhbF9saW5r' },
+      icon: Shield
     },
     {
-      title: 'Credit Scoree',
+      title: 'Credit Score',
       subtitle: 'Check for free',
-      color: 'bg-blue-500 text-white',
-      route: '/credit'
+      color: 'bg-blue-500',
+      route: '/webview',
+      params: { service: 'credit', url: 'https://choiceconnect.in/credit-score/QzAwNDY3NTE=?lead_source=Y29ubmVjdF9yZWZlcnJhbF9saW5r' },
+      icon: CreditCard
     },
     {
       title: 'Savings',
       subtitle: 'Higher returns',
-      color: 'bg-green-500 text-white',
-      route: '/savings'
+      color: 'bg-green-500',
+      route: '/webview',
+      params: { service: 'savings', url: 'https://choiceconnect.in/savings/QzAwNDY3NTE=?lead_source=Y29ubmVjdF9yZWZlcnJhbF9saW5r' },
+      icon: PiggyBank
     }
   ];
 
-  // Travel features
   const travelFeatures = [
     {
       title: 'Hotels',
       subtitle: 'Flat 50% off*',
       route: '/webview',
-      params: { service: 'hotels' },
-      image: 'https://i.imgur.com/2sWBiZ6.png', // Blue hotel building
+      params: { service: 'hotels', url: 'https://www.ixigo.com/?utm_source=Brand_Ggl_Search&utm_medium=paid_search_google&utm_campaign=Ixigo_Brand&utm_source=brand_g&utm_medium=paid_search_google&utm_campaign=ixigo_brand&gad_source=1&gad_campaignid=773471927&gbraid=0AAAAAC5edWCLzbP5p3WRmA2WJne9ZYHBF&gclid=CjwKCAjw56DBBhAkEiwAaFsG-nySx1J9nSwkc7ShhIbHGJ274x5k1Vy7WP1HngxIbmrDXfYDELUo8xoCBjAQAvD_BwE' },
+      image: 'https://i.imgur.com/2sWBiZ6.png',
       size: 'normal'
     },
     {
       title: 'Metro',
       subtitle: 'QR tickets & card recharge',
-      route: '/coming-soon',
+      route: '/webview',
       params: { 
-        service: {
-          title: 'Metro',
-          image: 'https://i.imgur.com/CTwpLo8.png',
-          description: 'Metro QR tickets and card recharge coming soon to your app!'
-        }
+        service: 'metro',
+        url: 'https://www.metro.com/'
       },
-      image: 'https://i.imgur.com/CTwpLo8.png', // Blue metro train
+      image: 'https://i.imgur.com/CTwpLo8.png',
       size: 'normal'
     },
     {
       title: 'Flights',
       subtitle: 'Get up to 25% off',
       route: '/webview',
-      params: { service: 'flights' },
-      image: 'https://i.imgur.com/FBiLAHl.png', // Airplane
+      params: { service: 'flights', url: 'https://www.airindia.com/en-in/book-flights/?em_dc=GRABAIR&utm_source=GrabOn&utm_medium=affiliate&utm_campaign=AirIndia_Direct_Banner' },
+      image: 'https://i.imgur.com/FBiLAHl.png',
       size: 'large'
     },
     {
       title: 'Bus',
       subtitle: 'Save up to ₹3000',
       route: '/webview',
-      params: { service: 'bus' },
-      image: 'https://i.imgur.com/FBiLAHl.png', // Purple bus illustration
+      params: { service: 'bus', url: 'https://www.redbus.in/?gad_source=1&gad_campaignid=22526717912&gclid=CjwKCAjw56DBBhAkEiwAaFsG-u-17s976Ek0KMArWLjtjKslqv2tfrVmTm7hSdHQPjC0Gwe1F8eosBoCtlYQAvD_BwE' },
+      image: 'https://i.imgur.com/FBiLAHl.png',
       size: 'normal'
     },
     {
       title: 'Train',
       subtitle: 'Confirmed tickets or 3X refund',
       route: '/webview',
-      params: { service: 'trains' },
-      image: 'https://i.imgur.com/QYWtFWS.png', // Yellow/purple train
+      params: { service: 'trains', url: 'https://www.railyatri.in/' },
+      image: 'https://i.imgur.com/QYWtFWS.png',
       size: 'normal'
     }
   ];
 
-  const openExternalLink = (url: string) => {
-    window.open(url, '_blank');
-  };
-
-  const handleTravelClick = (feature: any) => {
-    if (feature.route) {
+  const handleFeatureClick = (feature: any) => {
+    if (feature.title === 'Loans') {
+      setShowLoans(!showLoans);
+    } else if (feature.title === 'Insurance') {
+      setShowInsurance(!showInsurance);
+    } else if (feature.route) {
       if (feature.params) {
         navigate(feature.route, { state: feature.params });
       } else {
         navigate(feature.route);
       }
-    } else {
-      window.location.href = 'https://aczen.in';
     }
   };
 
+  const handleOptionClick = (url: string) => {
+    navigate('/webview', { state: { url } });
+  };
+
   const renderMainFeature = (feature: any, index: number) => {
+    const Icon = feature.icon;
     return (
       <div 
         key={index} 
-        className="bg-gray-900 rounded-xl py-6 px-4 h-52 flex flex-col items-center"
-        onClick={() => {
-          if (feature.title === 'Loans') {
-            setShowLoans(!showLoans);
-          } else if (feature.title === 'Insurance') {
-            setShowInsurance(!showInsurance);
-          } else if (feature.route) {
-            navigate(feature.route);
-          }
-        }}
+        className={`${feature.color} rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer relative`}
+        onClick={() => handleFeatureClick(feature)}
       >
-        <h3 className="text-xl font-medium text-center text-white mb-2">{feature.title}</h3>
-        <p className="text-sm text-gray-400 text-center px-1">{feature.subtitle}</p>
+        <div className="flex flex-col items-center">
+          <Icon className="h-8 w-8 text-white mb-2" strokeWidth={1.5} />
+          <h3 className="text-xs font-semibold text-white text-center">{feature.title}</h3>
+          <p className="text-xs text-white/80 text-center">{feature.subtitle}</p>
+        </div>
         {(feature.title === 'Loans' || feature.title === 'Insurance') && (
-          <ChevronDown className="h-5 w-5 mt-2 text-gray-500" />
+          <ChevronDown className="h-4 w-4 text-white/80 absolute bottom-1 right-1" />
         )}
       </div>
     );
   };
- 
+
   const renderLoanOption = (option: any, index: number) => {
     return (
       <div 
         key={index} 
-        className="bg-gray-900 rounded-xl p-4 flex items-start gap-3"
-        onClick={() => openExternalLink(option.link)}
+        className="bg-gray-900 rounded-xl p-4 flex items-start gap-3 cursor-pointer"
+        onClick={() => handleOptionClick(option.link)}
       >
         <div>
           <h3 className="font-medium">{option.title}</h3>
@@ -194,8 +197,8 @@ const FeatureIcons: React.FC = () => {
         key={index} 
         className={`bg-gray-900 rounded-xl overflow-hidden ${
           feature.size === 'large' ? 'row-span-2' : ''
-        }`}
-        onClick={() => handleTravelClick(feature)}
+        } cursor-pointer`}
+        onClick={() => handleFeatureClick(feature)}
         style={{ height: feature.size === 'large' ? '100%' : 'auto' }}
       >
         <div className="p-4 h-full flex flex-col justify-between">
@@ -217,119 +220,26 @@ const FeatureIcons: React.FC = () => {
 
   return (
     <div className="bg-black text-white">
-      {/* Financial Features */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-4 gap-2 mb-6">
         {mainFeatures.map((feature, index) => renderMainFeature(feature, index))}
       </div>
-      
-      {/* Loan Options (Expanded) */}
+
       {showLoans && (
         <div className="grid grid-cols-2 gap-3 mb-6">
           {loanOptions.map((option, index) => renderLoanOption(option, index))}
         </div>
       )}
-      
-      {/* Insurance Options (Expanded) */}
+
       {showInsurance && (
         <div className="grid grid-cols-2 gap-3 mb-6">
           {insuranceOptions.map((option, index) => renderLoanOption(option, index))}
         </div>
       )}
-      
-      {/* Travel & Transit Section */}
+
       <div className="mb-6">
         <h3 className="text-sm font-semibold text-white mb-3">Travel & Transit</h3>
         <div className="grid grid-cols-2 gap-3 grid-rows-3">
-          {/* First row: Hotels and Metro */}
-          <div 
-            className="bg-gray-900 rounded-xl overflow-hidden cursor-pointer"
-            onClick={() => window.open('https://www.ixigo.com/?utm_source=Brand_Ggl_Search&utm_medium=paid_search_google&utm_campaign=Ixigo_Brand&utm_source=brand_g&utm_medium=paid_search_google&utm_campaign=ixigo_brand&gad_source=1&gad_campaignid=773471927&gbraid=0AAAAAC5edWCLzbP5p3WRmA2WJne9ZYHBF&gclid=CjwKCAjw56DBBhAkEiwAaFsG-nySx1J9nSwkc7ShhIbHGJ274x5k1Vy7WP1HngxIbmrDXfYDELUo8xoCBjAQAvD_BwE', '_blank')}
-          >
-            <div className="p-4 h-full flex flex-col justify-between">
-              <div>
-                <h3 className="font-medium">Hotels</h3>
-                <p className="text-xs text-gray-400">Flat 50% off*</p>
-              </div>
-              <div className="flex justify-end">
-                <img 
-                  src="https://i.imgur.com/2sWBiZ6.png" 
-                  alt="Hotels" 
-                  className="h-10 w-10 object-contain"
-                />
-              </div>
-            </div>
-          </div>
-          <div className="bg-gray-900 rounded-xl overflow-hidden">
-            <div className="p-4 h-full flex flex-col justify-between">
-              <div>
-                <h3 className="font-medium">Metro</h3>
-                <p className="text-xs text-gray-400">QR tickets & card recharge</p>
-              </div>
-              <div className="flex justify-end">
-                <img 
-                  src="https://i.imgur.com/CTwpLo8.png" 
-                  alt="Metro" 
-                  className="h-10 w-10 object-contain"
-                />
-              </div>
-            </div>
-          </div>
-          
-          {/* Second and third rows: Flights on the left, Bus and Train on the right */}
-          <div 
-            className="bg-gray-900 rounded-xl overflow-hidden row-span-2 cursor-pointer"
-            onClick={() => window.open('https://www.airindia.com/en-in/book-flights/?em_dc=GRABAIR&utm_source=GrabOn&utm_medium=affiliate&utm_campaign=AirIndia_Direct_Banner', '_blank')}
-          >
-            <div className="p-4 h-full flex flex-col justify-between">
-              <div>
-                <h3 className="font-medium">Flights</h3>
-                <p className="text-xs text-gray-400">Get up to 25% off</p>
-              </div>
-              <div className="flex justify-end">
-                <img 
-                  src="https://i.imgur.com/FBiLAHl.png" 
-                  alt="Flights" 
-                  className="h-10 w-10 object-contain"
-                />
-              </div>
-            </div>
-          </div>
-          <div 
-            className="bg-gray-900 rounded-xl overflow-hidden cursor-pointer"
-            onClick={() => window.open('https://www.redbus.in/?gad_source=1&gad_campaignid=22526717912&gclid=CjwKCAjw56DBBhAkEiwAaFsG-u-17s976Ek0KMArWLjtjKslqv2tfrVmTm7hSdHQPjC0Gwe1F8eosBoCtlYQAvD_BwE', '_blank')}
-          >
-            <div className="p-4 h-full flex flex-col justify-between">
-              <div>
-                <h3 className="font-medium">Bus</h3>
-                <p className="text-xs text-gray-400">Save up to ₹3000</p>
-              </div>
-              <div className="flex justify-end">
-                <img 
-                  src="https://i.imgur.com/FBiLAHl.png" 
-                  alt="Bus" 
-                  className="h-10 w-10 object-contain"
-                />
-              </div>
-            </div>
-          </div>
-          <div 
-            className="bg-gray-900 rounded-xl overflow-hidden cursor-pointer"
-            onClick={() => window.open('https://www.railyatri.in/', '_blank')}
-          >
-            <div className="p-4 h-full flex flex-col justify-between">
-              <div>
-                <h3 className="font-medium">Train</h3>
-                <p className="text-xs text-gray-400">Confirmed tickets or 3X refund</p>
-              </div>
-              <div className="flex justify-end">
-                <img 
-                  src="https://i.imgur.com/QYWtFWS.png" 
-                  alt="Train" 
-                  className="h-10 w-10 object-contain"
-                />
-              </div>
-            </div>
-          </div>
+          {travelFeatures.map((feature, index) => renderTravelFeature(feature, index))}
         </div>
       </div>
     </div>

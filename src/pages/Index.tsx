@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import InvestmentSummary from '../components/InvestmentSummary';
 import InvestmentTabs from '../components/InvestmentTabs';
@@ -9,7 +9,7 @@ import InviteEarn from '../components/InviteEarn';
 import Illustration from '../components/Illustration';
 import { usePreciousMetalPrices } from '../hooks/usePreciousMetalPrices';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { User, Tag, Trophy, Package } from 'lucide-react';
+import { User, Tag, Trophy, Package, Smartphone } from 'lucide-react';
 
 // Define types for investments
 type MetalType = 'gold' | 'silver';
@@ -200,6 +200,16 @@ const Index: React.FC = () => {
           <InviteEarn />
           
           <Illustration />
+          
+          <div className="mt-6 flex justify-center">
+            <Link 
+              to="/upi-intent" 
+              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-2 px-4 rounded-lg flex items-center"
+            >
+              <Smartphone className="mr-2 h-4 w-4" />
+              Try UPI Intent Demo
+            </Link>
+          </div>
         </div>
       </div>
     </div>

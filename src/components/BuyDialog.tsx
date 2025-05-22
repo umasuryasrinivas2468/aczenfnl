@@ -13,11 +13,12 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { Coins, Info, Copy, LayoutList } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { useUser } from "@clerk/clerk-react"
+import { useUser, useAuth } from "@clerk/clerk-react"
 import { initiateUpiIntentPayment, generateOrderId } from "@/services/upiIntentService"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { supabase } from '@/lib/supabase'
 import { useNavigate } from 'react-router-dom'
+import CashfreeCheckout from './CashfreeCheckout'
 
 // Debug helper - adds a global function to enable UPI intent testing mode
 if (typeof window !== 'undefined') {
@@ -79,6 +80,7 @@ if (typeof window !== 'undefined') {
 const BuyDialog = () => {
   const { toast } = useToast()
   const { user } = useUser()
+  const { getToken } = useAuth()
   const navigate = useNavigate()
   const [amount, setAmount] = useState("")
   const [metal, setMetal] = useState("gold")
@@ -86,7 +88,33 @@ const BuyDialog = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [forceUpiEnabled, setForceUpiEnabled] = useState(false)
   const [directUpiEnabled, setDirectUpiEnabled] = useState(false)
-  const [paymentStatus, setPaymentStatus] = useState<{ orderId?: string, url?: string } | null>(null)
+  const [paymentStatus, setPaymentStatus] = useState<{ 
+    orderId?: string, 
+    upiLink?: string,
+    paymentSessionId?: string
+  } | null>(null)
+  const [userDetails, setUserDetails] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+  } | null>(null)
+
+  // Fetch user details from Clerk when component mounts or user changes
+  useEffect(() => {
+    if (user) {
+      const fullName = user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
+      const email = user.primaryEmailAddress?.emailAddress || '';
+      const phone = user.primaryPhoneNumber?.phoneNumber || '';
+      
+      console.log("Fetched user details from Clerk:", { fullName, email, phone });
+      
+      setUserDetails({
+        name: fullName,
+        email: email,
+        phone: phone
+      });
+    }
+  }, [user]);
 
   // Debug log when component mounts
   useEffect(() => {
@@ -172,8 +200,8 @@ const BuyDialog = () => {
   }
 
   const handleRetryUPI = () => {
-    if (paymentStatus?.url) {
-      window.location.href = paymentStatus.url
+    if (paymentStatus?.upiLink) {
+      window.location.href = paymentStatus.upiLink
     } else {
       const lastUrl = localStorage.getItem('last_upi_url')
       if (lastUrl) {
@@ -234,6 +262,181 @@ const BuyDialog = () => {
     }
   };
 
+  // Function to store transaction in Supabase
+  const storeTransactionInSupabase = async (transactionData) => {
+    try {
+      console.log('Storing transaction in Supabase:', transactionData);
+      
+      // First check if the transaction already exists
+      const { data: existingData, error: checkError } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('order_id', transactionData.orderId)
+        .maybeSingle();
+      
+      if (checkError) {
+        console.error('Error checking for existing transaction:', checkError);
+      }
+      
+      // If transaction already exists, don't duplicate it
+      if (existingData?.id) {
+        console.log('Transaction already exists in Supabase, skipping insertion');
+        return true;
+      }
+      
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([
+          {
+            order_id: transactionData.orderId,
+            user_id: transactionData.userId,
+            amount: transactionData.amount,
+            metal_type: transactionData.type,
+            status: 'pending', // Initial status is pending
+            payment_method: 'UPI',
+            payment_session_id: transactionData.upiLink,
+            created_at: new Date().toISOString()
+          }
+        ])
+        .select();
+        
+      if (error) {
+        console.error('Failed to store transaction in Supabase:', error);
+        
+        // Try a direct insert without returning data as fallback
+        const { error: insertError } = await supabase
+          .from('transactions')
+          .insert([
+            {
+              order_id: transactionData.orderId,
+              user_id: transactionData.userId,
+              amount: transactionData.amount,
+              metal_type: transactionData.type,
+              status: 'pending',
+              payment_method: 'UPI',
+              created_at: new Date().toISOString()
+            }
+          ]);
+          
+        if (insertError) {
+          console.error('Fallback insert also failed:', insertError);
+          return false;
+        } else {
+          console.log('Fallback transaction insert succeeded');
+          return true;
+        }
+      } else {
+        console.log('Transaction stored in Supabase:', data);
+        return true;
+      }
+    } catch (err) {
+      console.error('Error storing transaction in Supabase:', err);
+      return false;
+    }
+  };
+
+  const handlePaymentSuccess = async (data: any) => {
+    console.log("Payment successful:", data);
+    
+    // First verify the payment status with backend before proceeding
+    try {
+      // Use the backend API to verify payment is actually successful
+      const API_URL = 'https://backend-36le.onrender.com';
+      const response = await fetch(`${API_URL}/api/verify-payment/${paymentStatus?.orderId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        console.error("Payment verification failed:", response.statusText);
+        throw new Error("Payment verification failed");
+      }
+      
+      const result = await response.json();
+      console.log("Payment verification result:", result);
+      
+      // Only proceed if backend confirms payment is successful
+      if (!result.success || result.status !== "SUCCESS") {
+        console.error("Payment not confirmed by backend:", result);
+        toast({
+          variant: "destructive",
+          title: "Payment Verification Failed",
+          description: "Your payment could not be verified. Please contact support."
+        });
+        return;
+      }
+      
+      // Update transaction status in Supabase
+      const { error } = await supabase
+        .from('transactions')
+        .update({ 
+          status: 'completed', 
+          updated_at: new Date().toISOString(),
+          payment_id: data?.paymentId || result?.transactions?.[0]?.cf_payment_id || null
+        })
+        .eq('order_id', paymentStatus?.orderId);
+        
+      if (error) {
+        console.error('Failed to update transaction status:', error);
+      }
+      
+      toast({
+        title: "Payment Successful",
+        description: "Your payment has been processed and verified successfully."
+      });
+      
+      // Close dialog and navigate to payment success page
+      closeDialog();
+      navigate('/payment-success', { 
+        state: { 
+          orderId: paymentStatus?.orderId,
+          amount: parseFloat(amount),
+          metal: metal,
+          timestamp: new Date().toISOString(),
+          verified: true // Add a flag to indicate the payment was verified
+        }
+      });
+      
+    } catch (err) {
+      console.error('Error verifying payment:', err);
+      toast({
+        variant: "destructive",
+        title: "Verification Error",
+        description: "Could not verify your payment. Please check your payment status in history."
+      });
+    }
+  };
+
+  const handlePaymentFailure = async (error: any) => {
+    console.error("Payment failed:", error);
+    
+    // Update transaction status in Supabase
+    try {
+      const { error: dbError } = await supabase
+        .from('transactions')
+        .update({ 
+          status: 'failed', 
+          updated_at: new Date().toISOString(),
+          failure_reason: error?.message || 'Unknown error'
+        })
+        .eq('order_id', paymentStatus?.orderId);
+        
+      if (dbError) {
+        console.error('Failed to update transaction status:', dbError);
+      }
+    } catch (err) {
+      console.error('Error updating transaction status:', err);
+    }
+    
+    toast({
+      variant: "destructive",
+      title: "Payment Failed",
+      description: error?.message || "Payment could not be processed. Please try again.",
+    });
+  };
+
   const handleBuy = async () => {
     console.log("Buy button clicked", { amount, metal, user })
     
@@ -255,76 +458,104 @@ const BuyDialog = () => {
     setIsLoading(true)
     
     try {
-      // Generate order ID that includes user ID and metal type
-      console.log("Generating order ID with user:", user.id, "metal:", metal)
-      const userId = user.id
-      const orderId = generateOrderId(userId, metal)
-      console.log("Generated order ID:", orderId)
+      // Get Clerk session token using the useAuth hook
+      let token;
+      try {
+        token = await getToken();
+        console.log("Got auth token:", token ? "Token received" : "No token");
+      } catch (tokenError) {
+        console.error("Error getting auth token:", tokenError);
+        // Continue without token as fallback
+      }
       
-      const customerName = user.fullName || ''
-      const customerEmail = user.primaryEmailAddress?.emailAddress || ''
-      const customerPhone = user.primaryPhoneNumber?.toString() || '9999999999'
+      // Prepare user data from Clerk
+      const userData = {
+        customerId: user.id,
+        customerName: userDetails?.name || user.fullName || 'User',
+        customerEmail: userDetails?.email || user.primaryEmailAddress?.emailAddress || 'user@example.com',
+        customerPhone: userDetails?.phone || user.primaryPhoneNumber?.phoneNumber || '9999999999'
+      };
       
-      console.log(`Initiating UPI payment: ${metal} worth ₹${parseFloat(amount)}, Order ID: ${orderId}`)
+      console.log("Sending user data to backend:", userData);
+      
+      // Use the correct API URL (backend is running on port 3001)
+      const API_URL = 'https://backend-36le.onrender.com';
+      
+      const response = await fetch(`${API_URL}/api/create-order`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ 
+          amount: parseFloat(amount), 
+          metal,
+          userData // Always send user data from frontend
+        })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Server error response:", errorText);
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      }
+      
+      let result;
+      try {
+        result = await response.json();
+      } catch (jsonErr) {
+        console.error("JSON parsing error:", jsonErr);
+        throw new Error('Server error: Invalid response from backend.');
+      }
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to create order');
+      }
+      
+      const orderData = result.data;
+      console.log("Order created successfully:", orderData);
       
       // Store transaction in local storage for recovery
       const transactionData = {
-        orderId,
+        orderId: orderData.order_id,
         amount: parseFloat(amount),
         type: metal,
         timestamp: new Date().toISOString(),
         paymentMethod: 'UPI',
-        userId: userId
-      }
-      console.log("Storing transaction data:", transactionData)
-      localStorage.setItem('pendingTransaction', JSON.stringify(transactionData))
+        userId: user.id,
+        userName: userData.customerName,
+        userEmail: userData.customerEmail,
+        userPhone: userData.customerPhone,
+        upiLink: orderData.upi_link || ""
+      };
+      localStorage.setItem('pendingTransaction', JSON.stringify(transactionData));
+      
+      // Store transaction in Supabase
+      await storeTransactionInSupabase(transactionData);
       
       // Set the payment status to show in the UI
-      setPaymentStatus({ orderId })
-
-      // Try to manually record the transaction first for better reliability
-      await manuallyRecordTransaction(orderId, userId, parseFloat(amount), metal);
+      setPaymentStatus({ 
+        orderId: orderData.order_id,
+        upiLink: orderData.upi_link || "",
+        paymentSessionId: orderData.payment_session_id || ""
+      });
       
-      // Initiate UPI Intent payment
-      console.log("Calling initiateUpiIntentPayment with params:", {
-        orderId,
-        amount: parseFloat(amount),
-        customerName,
-        customerEmail,
-        customerPhone,
-        metalType: metal,
-        directUpi: directUpiEnabled
-      })
-      
-      await initiateUpiIntentPayment({
-        orderId,
-        amount: parseFloat(amount),
-        customerName,
-        customerEmail,
-        customerPhone,
-        vpa: "aczentechnologiesp.cf@axisbank", // Merchant VPA
-        description: `Payment for ${metal} worth ₹${parseFloat(amount)}`,
-        userId: userId,
-        metalType: metal
-      })
-      
-      // Capture the UPI URL for retry options
-      const lastUrl = localStorage.getItem('last_upi_url')
-      if (lastUrl) {
-        setPaymentStatus(prev => ({ ...prev, url: lastUrl }))
+      // Check if on mobile device to auto-trigger UPI intent
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (isMobile && (orderData.payment_session_id || orderData.upi_link)) {
+        console.log("Mobile device detected, auto-triggering UPI");
+        // The CashfreeCheckout component will auto-trigger UPI on mobile
       }
       
-      // Don't close dialog after initiating payment so user can see options
-      // closeDialog()
     } catch (error) {
-      console.error('Error initiating UPI payment:', error)
+      console.error('Error creating order:', error);
       toast({
         variant: "destructive",
         title: "Payment Error",
-        description: error instanceof Error ? error.message : 'Failed to initiate payment. Please try again.'
-      })
+        description: error instanceof Error ? error.message : 'Failed to create order. Please try again.'
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
@@ -354,7 +585,7 @@ const BuyDialog = () => {
               <Alert className="bg-blue-900/20 border-blue-800">
                 <Info className="h-4 w-4 text-blue-400" />
                 <AlertDescription className="text-blue-100 text-sm">
-                  UPI payment initiated. If UPI apps haven't opened automatically, please try the options below.
+                  Payment initiated for {userDetails?.name || 'you'}. {/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 'UPI app should open automatically.' : 'Click the button below to proceed with payment.'}
                 </AlertDescription>
               </Alert>
               
@@ -362,50 +593,26 @@ const BuyDialog = () => {
                 <p className="text-gray-400">Order ID: <span className="text-white">{paymentStatus.orderId}</span></p>
                 <p className="text-gray-400">Amount: <span className="text-white">₹{amount}</span></p>
                 <p className="text-gray-400">Asset: <span className="text-white capitalize">{metal}</span></p>
+                {userDetails && (
+                  <>
+                    <p className="text-gray-400">Name: <span className="text-white">{userDetails.name}</span></p>
+                    <p className="text-gray-400">Email: <span className="text-white">{userDetails.email}</span></p>
+                    <p className="text-gray-400">Phone: <span className="text-white">{userDetails.phone}</span></p>
+                  </>
+                )}
               </div>
               
               <div className="space-y-2">
-                <Button
-                  className="w-full"
-                  onClick={handleRetryUPI}
-                >
-                  Retry Opening UPI Apps
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleTryBasicUPI}
-                >
-                  Try Simplified UPI Format
-                </Button>
-                {paymentStatus.url && (
-                  <Button
-                    variant="ghost"
-                    className="w-full"
-                    onClick={() => copyToClipboard(paymentStatus.url!)}
-                  >
-                    <Copy className="h-4 w-4 mr-2" />
-                    Copy UPI URL
-                  </Button>
-                )}
-                <Button
-                  variant="secondary"
-                  className="w-full"
-                  onClick={viewTransactionHistory}
-                >
-                  <LayoutList className="h-4 w-4 mr-2" />
-                  View Transaction History
-                </Button>
-              </div>
-              
-              <div className="pt-2">
-                <Button
-                  variant="outline"
-                  className="w-full text-red-400 border-red-900 hover:bg-red-900/20"
-                  onClick={() => setPaymentStatus(null)}
-                >
-                  Start Over
-                </Button>
+                <CashfreeCheckout
+                  orderId={paymentStatus.orderId!}
+                  amount={parseFloat(amount)}
+                  upiLink={paymentStatus.upiLink}
+                  paymentSessionId={paymentStatus.paymentSessionId}
+                  onSuccess={handlePaymentSuccess}
+                  onFailure={handlePaymentFailure}
+                  buttonText="Pay Now"
+                  className="w-full bg-green-600 hover:bg-green-700"
+                />
               </div>
             </div>
           ) : (
@@ -447,6 +654,21 @@ const BuyDialog = () => {
                   </div>
                 </RadioGroup>
               </div>
+              
+              {/* Show user details if available */}
+              {userDetails && (
+                <div className="space-y-2 border border-gray-800 p-3 rounded-lg bg-gray-800/50">
+                  <h3 className="text-sm font-medium text-gray-300">User Details (from Clerk)</h3>
+                  <div className="grid grid-cols-2 gap-1 text-xs">
+                    <p className="text-gray-400">Name:</p>
+                    <p className="text-gray-200">{userDetails.name}</p>
+                    <p className="text-gray-400">Email:</p>
+                    <p className="text-gray-200">{userDetails.email}</p>
+                    <p className="text-gray-400">Phone:</p>
+                    <p className="text-gray-200">{userDetails.phone || 'Not provided'}</p>
+                  </div>
+                </div>
+              )}
               
               <Button 
                 onClick={handleBuy} 

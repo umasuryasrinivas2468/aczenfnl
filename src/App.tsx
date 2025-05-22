@@ -21,11 +21,12 @@ import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentFailure from "./pages/PaymentFailure";
 import PaymentPending from "./pages/PaymentPending";
 import Checkout from "./pages/Checkout";
+import CheckoutTest from "./pages/CheckoutTest";
 import PaymentStatus from "./pages/PaymentStatus";
 import Travel from "./pages/Travel";
 import WebView from "./pages/WebView";
-import UpiCheckout from "./pages/UpiCheckout";
 import ComingSoon from "./pages/ComingSoon";
+import UpiCheckoutMobile from "./pages/UpiCheckoutMobile";
 import { syncAllTransactions } from "@/services/transactionService";
 
 const queryClient = new QueryClient();
@@ -147,12 +148,13 @@ const App = () => {
               <Route path="/payment-failure" element={<ProtectedRoute><PaymentFailure /></ProtectedRoute>} />
               <Route path="/payment-pending" element={<ProtectedRoute><PaymentPending /></ProtectedRoute>} />
               <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
-              <Route path="/upi-checkout" element={<ProtectedRoute><UpiCheckout /></ProtectedRoute>} />
+              <Route path="/upi-checkout" element={<ProtectedRoute><UpiCheckoutMobile /></ProtectedRoute>} />
               
               {/* New routes */}
               <Route path="/travel" element={<ProtectedRoute><Travel /></ProtectedRoute>} />
               <Route path="/webview" element={<ProtectedRoute><WebView /></ProtectedRoute>} />
               <Route path="/coming-soon" element={<ProtectedRoute><ComingSoon /></ProtectedRoute>} />
+              <Route path="/checkout-test" element={<ProtectedRoute><CheckoutTest /></ProtectedRoute>} />
               
               <Route path="*" element={<NotFound />} />
             </Routes>
