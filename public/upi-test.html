@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UPI Intent Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .card {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        button {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        button.loading {
+            position: relative;
+            color: transparent;
+        }
+        button.loading::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            top: 50%;
+            left: 50%;
+            margin-top: -10px;
+            margin-left: -10px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .status {
+            margin-top: 20px;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+        .status.success {
+            color: green;
+        }
+        .status.error {
+            color: red;
+        }
+        .status.pending {
+            color: orange;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        .logs {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+        .log-item {
+            margin-bottom: 4px;
+            word-break: break-all;
+        }
+        .log-item.error {
+            color: red;
+        }
+        .log-item.success {
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>UPI Intent Test</h1>
+        <div class="form-group">
+            <label for="payment-session-id">Payment Session ID:</label>
+            <input type="text" id="payment-session-id" placeholder="Enter payment session ID">
+        </div>
+        <div class="form-group">
+            <label for="order-id">Order ID:</label>
+            <input type="text" id="order-id" placeholder="Enter order ID">
+        </div>
+        <button id="pay-button">Pay with UPI Intent</button>
+        <button id="generate-session">Generate Test Session ID</button>
+        
+        <div id="status-container" class="status" style="display: none;"></div>
+        
+        <div class="logs">
+            <div class="log-item">Logs will appear here...</div>
+        </div>
+    </div>
+
+    <script>
+        // Function to add log entries
+        function addLog(message, type = 'info') {
+            const logsContainer = document.querySelector('.logs');
+            const logItem = document.createElement('div');
+            logItem.className = `log-item ${type}`;
+            logItem.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
+            logsContainer.appendChild(logItem);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        // Loading state for button
+        function setButtonLoading(button, isLoading) {
+            if (isLoading) {
+                button.disabled = true;
+                button.classList.add('loading');
+                button.setAttribute('data-text', button.textContent);
+                button.textContent = '';
+            } else {
+                button.disabled = false;
+                button.classList.remove('loading');
+                button.textContent = button.getAttribute('data-text') || 'Pay with UPI Intent';
+            }
+        }
+
+        // Handle status updates
+        function updateStatus(status, message) {
+            const statusContainer = document.getElementById('status-container');
+            statusContainer.style.display = 'block';
+            statusContainer.className = `status ${status}`;
+            statusContainer.textContent = message;
+        }
+
+        // Generate a random order ID and test payment session ID
+        function generateTestData() {
+            const generateButton = document.getElementById('generate-session');
+            setButtonLoading(generateButton, true);
+            
+            // Generate a random order ID
+            const orderId = `order_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+            
+            // Generate a random session ID
+            const sessionId = `test_session_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+            
+            // Update input fields
+            document.getElementById('order-id').value = orderId;
+            document.getElementById('payment-session-id').value = sessionId;
+            
+            addLog(`Generated test order ID: ${orderId}`, 'success');
+            addLog(`Generated test session ID: ${sessionId}`, 'success');
+            
+            setTimeout(() => {
+                setButtonLoading(generateButton, false);
+            }, 500);
+        }
+
+        // Load Cashfree SDK from CDN
+        function loadCashfreeSDK() {
+            addLog('Loading Cashfree SDK from CDN...');
+            
+            // Create script tag
+            const script = document.createElement('script');
+            script.src = 'https://sdk.cashfree.com/js/ui/2.0.0/cashfree.prod.js';
+            script.async = true;
+            
+            script.onload = () => {
+                addLog('Cashfree SDK loaded successfully', 'success');
+            };
+            
+            script.onerror = (error) => {
+                addLog('Failed to load Cashfree SDK', 'error');
+                console.error('Error loading SDK:', error);
+            };
+            
+            // Add script to document
+            document.body.appendChild(script);
+        }
+
+        // Initialize Cashfree payment
+        async function initiateCashfreePayment() {
+            const payButton = document.getElementById('pay-button');
+            const sessionId = document.getElementById('payment-session-id').value;
+            const orderId = document.getElementById('order-id').value;
+            
+            if (!sessionId) {
+                addLog('Payment session ID is required', 'error');
+                updateStatus('error', 'Payment session ID is required');
+                return;
+            }
+            
+            if (!orderId) {
+                addLog('Order ID is required', 'error');
+                updateStatus('error', 'Order ID is required');
+                return;
+            }
+            
+            if (!window.Cashfree) {
+                addLog('Cashfree SDK not loaded', 'error');
+                updateStatus('error', 'Payment gateway not initialized');
+                return;
+            }
+            
+            setButtonLoading(payButton, true);
+            addLog(`Initiating payment for order: ${orderId}`);
+            
+            try {
+                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                
+                // Configure UPI Intent payment
+                const checkoutOptions = {
+                    paymentSessionId: sessionId,
+                    redirectTarget: "_self",
+                    paymentMethod: "upi",
+                    components: {
+                        upi: {
+                            // Force UPI Intent mode for better mobile experience
+                            upiMode: "intent"
+                        }
+                    },
+                    onSuccess: (data) => {
+                        addLog('Payment success callback received', 'success');
+                        console.log('Payment Success:', data);
+                        updateStatus('success', 'Payment successful');
+                        setButtonLoading(payButton, false);
+                    },
+                    onFailure: (error) => {
+                        addLog(`Payment failed: ${error.message || 'Unknown error'}`, 'error');
+                        console.error('Payment Failure:', error);
+                        updateStatus('error', `Payment failed: ${error.message || 'Unknown error'}`);
+                        setButtonLoading(payButton, false);
+                    }
+                };
+                
+                addLog('Checkout options configured', 'info');
+                console.log('Checkout options:', checkoutOptions);
+                
+                // Trigger Cashfree checkout
+                await window.Cashfree.checkout(checkoutOptions);
+                addLog('Checkout initiated', 'info');
+                
+            } catch (error) {
+                addLog(`Error initiating payment: ${error.message || 'Unknown error'}`, 'error');
+                console.error('Checkout error:', error);
+                updateStatus('error', `Error initiating payment: ${error.message || 'Unknown error'}`);
+                setButtonLoading(payButton, false);
+            }
+        }
+
+        // Add event listeners when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            // Load SDK on page load
+            loadCashfreeSDK();
+            
+            // Add click handler for pay button
+            const payButton = document.getElementById('pay-button');
+            payButton.addEventListener('click', initiateCashfreePayment);
+            
+            // Add click handler for generate button
+            const generateButton = document.getElementById('generate-session');
+            generateButton.addEventListener('click', generateTestData);
+            
+            addLog('Page loaded, ready for testing');
+        });
+    </script>
+</body>
+</html> 

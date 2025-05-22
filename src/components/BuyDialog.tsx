@@ -21,34 +21,47 @@ import { supabase } from '@/lib/supabase'
 import { useNavigate } from 'react-router-dom'
 import CashfreeCheckout from './CashfreeCheckout'
 
+// Define global type for Cashfree in window object
+declare global {
+  interface Window {
+    Cashfree?: any;
+    enableUpiIntent?: () => void;
+    disableUpiIntent?: () => void;
+    enableDirectUpi?: () => void;
+    disableDirectUpi?: () => void;
+    openUPI?: (url?: string) => boolean;
+    testSupabase?: () => Promise<void>;
+  }
+}
+
 // Debug helper - adds a global function to enable UPI intent testing mode
 if (typeof window !== 'undefined') {
-  (window as any).enableUpiIntent = () => {
+  window.enableUpiIntent = () => {
     localStorage.setItem('force_upi_intent', 'true');
     console.log("UPI Intent testing mode ENABLED");
     alert("UPI Intent testing mode enabled. Reload the page for changes to take effect.");
   };
   
-  (window as any).disableUpiIntent = () => {
+  window.disableUpiIntent = () => {
     localStorage.removeItem('force_upi_intent');
     console.log("UPI Intent testing mode DISABLED");
     alert("UPI Intent testing mode disabled. Reload the page for changes to take effect.");
   };
 
-  (window as any).enableDirectUpi = () => {
+  window.enableDirectUpi = () => {
     localStorage.setItem('use_direct_upi', 'true');
     console.log("Direct UPI mode ENABLED");
     alert("Direct UPI mode enabled. Reload the page for changes to take effect.");
   };
   
-  (window as any).disableDirectUpi = () => {
+  window.disableDirectUpi = () => {
     localStorage.removeItem('use_direct_upi');
     console.log("Direct UPI mode DISABLED");
     alert("Direct UPI mode disabled. Reload the page for changes to take effect.");
   };
 
   // Add function to manually open UPI
-  (window as any).openUPI = (url) => {
+  window.openUPI = (url) => {
     if (!url) {
       const lastUrl = localStorage.getItem('last_upi_url');
       if (lastUrl) {
@@ -62,7 +75,7 @@ if (typeof window !== 'undefined') {
   };
 
   // Debug function to check Supabase connection
-  (window as any).testSupabase = async () => {
+  window.testSupabase = async () => {
     try {
       const { data, error } = await supabase.from('transactions').select('*').limit(1);
       console.log('Supabase test result:', { data, error });
@@ -99,6 +112,37 @@ const BuyDialog = () => {
     email: string;
     phone: string;
   } | null>(null)
+
+  // Load Cashfree SDK on component mount
+  useEffect(() => {
+    const loadCashfreeSDK = () => {
+      // Check if SDK already loaded
+      if (window.Cashfree) {
+        console.log("Cashfree SDK already loaded");
+        return;
+      }
+      
+      console.log("Loading Cashfree SDK from CDN");
+      
+      // Create script tag
+      const script = document.createElement('script');
+      script.src = 'https://sdk.cashfree.com/js/ui/2.0.0/cashfree.prod.js';
+      script.async = true;
+      
+      script.onload = () => {
+        console.log("Cashfree SDK loaded from CDN");
+      };
+      
+      script.onerror = (error) => {
+        console.error("Error loading Cashfree SDK from CDN:", error);
+      };
+      
+      // Add script to document
+      document.body.appendChild(script);
+    };
+    
+    loadCashfreeSDK();
+  }, []);
 
   // Fetch user details from Clerk when component mounts or user changes
   useEffect(() => {
