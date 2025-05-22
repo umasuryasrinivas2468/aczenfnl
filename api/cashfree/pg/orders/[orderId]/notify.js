@@ -82,7 +82,7 @@ export default async function handler(req, res) {
       { status: cashfreeStatus },
       {
         headers: {
-          'x-api-version': '2022-09-01',
+          'x-api-version': '2025-01-01',
           'x-client-id': CASHFREE_API_KEY,
           'x-client-secret': CASHFREE_SECRET_KEY,
           'Content-Type': 'application/json'

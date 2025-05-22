@@ -77,7 +77,7 @@ const createOrder = async (
   
   const response = await axios.post(API_URL, payload, {
     headers: {
-      'x-api-version': '2022-09-01',
+      'x-api-version': '2025-01-01',
       'x-client-id': API_KEY,
       'x-client-secret': API_SECRET,
       'Content-Type': 'application/json'
@@ -105,7 +105,7 @@ const createUpiPayment = async (orderToken: string, customerPhone: string) => {
   
   return axios.post(API_URL, payload, {
     headers: {
-      'x-api-version': '2022-09-01',
+      'x-api-version': '2025-01-01',
       'x-client-id': API_KEY,
       'x-client-secret': API_SECRET,
       'Content-Type': 'application/json'
@@ -128,7 +128,7 @@ export const verifyUpiPayment = async (orderId: string) => {
   try {
     const response = await axios.get(`https://api.cashfree.com/pg/orders/${orderId}`, {
       headers: {
-        'x-api-version': '2022-09-01',
+        'x-api-version': '2025-01-01',
         'x-client-id': API_KEY,
         'x-client-secret': API_SECRET
       }

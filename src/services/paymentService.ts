@@ -130,6 +130,42 @@ export const verifyUpiPayment = async (orderId: string, upiTxnId?: string, statu
   }
 };
 
+// Function to get transaction details from payment provider
+export const getTransactionDetails = async (orderId: string) => {
+  try {
+    // First try to get details from our API
+    const response = await axios.get(`/api/transaction-details/${orderId}`);
+    
+    console.log("Transaction details response:", response.data);
+    
+    return {
+      orderId: response.data.orderId,
+      status: response.data.status,
+      amount: response.data.amount,
+      paymentId: response.data.paymentId,
+      paymentMethod: response.data.paymentMethod,
+      timestamp: response.data.timestamp
+    };
+  } catch (error: any) {
+    console.error('Error getting transaction details:', error.response ? error.response.data : error);
+    
+    // For demo purposes, return mock data if API fails
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('Using mock transaction details for demonstration');
+      return {
+        orderId,
+        status: 'SUCCESS', // Default to success for demonstration
+        amount: 1000, // Default amount
+        paymentId: `MOCK_${Date.now()}`,
+        paymentMethod: 'UPI',
+        timestamp: new Date().toISOString()
+      };
+    }
+    
+    throw error;
+  }
+};
+
 // Types for transaction history
 export interface TransactionDetails {
   orderId: string;

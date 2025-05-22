@@ -76,7 +76,7 @@ export const callCashfreeNotify = async (orderId: string, status: string): Promi
       { status },
       {
         headers: {
-          'x-api-version': '2022-09-01',
+          'x-api-version': '2025-01-01',
           'x-client-id': API_KEY,
           'x-client-secret': API_SECRET,
           'Content-Type': 'application/json'

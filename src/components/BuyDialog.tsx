@@ -14,7 +14,8 @@ import { useToast } from "@/hooks/use-toast"
 import { Coins, Info, Copy, LayoutList } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useUser, useAuth } from "@clerk/clerk-react"
-import { initiateUpiIntentPayment, generateOrderId } from "@/services/upiIntentService"
+import { initiateUpiIntentPayment } from "@/services/upiIntentService"
+import { generateOrderId } from "@/services/paymentService"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { supabase } from '@/lib/supabase'
 import { useNavigate } from 'react-router-dom'

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { initiateUpiIntentPayment, verifyUpiPayment, UpiPaymentParams } from '@/services/upiIntentService';
+import { initiateUpiIntentPayment, verifyUpiPaymentStatus, UpiPaymentParams } from '@/services/upiIntentService';
 import { Loader2, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 
 interface UpiIntentPaymentProps {
@@ -106,7 +106,7 @@ const UpiIntentPayment: React.FC<UpiIntentPaymentProps> = ({
       setLoading(true);
       
       // Verify payment status
-      const result = await verifyUpiPayment(orderId);
+      const result = await verifyUpiPaymentStatus(orderId);
       
       // Status will be updated by the event listener
     } catch (error: any) {

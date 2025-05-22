@@ -32,7 +32,7 @@ interface PaymentVerificationParams {
  */
 export const createCashfreeOrder = async (
   params: OrderParams,
-  environment: 'SANDBOX' | 'PRODUCTION' = 'SANDBOX'
+  environment: 'SANDBOX' | 'PRODUCTION' = 'PRODUCTION'
 ): Promise<{ success: boolean; orderId?: string; paymentSessionId?: string; error?: string }> => {
   try {
     const baseUrl = environment === 'PRODUCTION' ? PRODUCTION_BASE_URL : SANDBOX_BASE_URL;
@@ -117,7 +117,7 @@ export const verifyPaymentStatus = async (
  */
 export const createCashfreeOrderReal = async (
   params: OrderParams,
-  environment: 'SANDBOX' | 'PRODUCTION' = 'SANDBOX'
+  environment: 'SANDBOX' | 'PRODUCTION' = 'PRODUCTION'
 ): Promise<any> => {
   try {
     const baseUrl = environment === 'PRODUCTION' ? PRODUCTION_BASE_URL : SANDBOX_BASE_URL;
@@ -144,7 +144,7 @@ export const createCashfreeOrderReal = async (
     
     const response = await axios.post(`${baseUrl}/orders`, payload, {
       headers: {
-        'x-api-version': '2022-09-01',
+        'x-api-version': '2025-01-01',
         'x-client-id': API_KEY,
         'x-client-secret': API_SECRET,
         'Content-Type': 'application/json'
@@ -177,7 +177,7 @@ export const verifyPaymentStatusReal = async (
     
     const response = await axios.get(`${baseUrl}/orders/${params.orderId}`, {
       headers: {
-        'x-api-version': '2022-09-01',
+        'x-api-version': '2025-01-01',
         'x-client-id': API_KEY,
         'x-client-secret': API_SECRET
       }
