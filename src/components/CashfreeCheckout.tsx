@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Capacitor } from '@capacitor/core';
+import { ensureCashfreeSDK, getCashfreeInstance } from '@/utils/cashfreeLoader';
 
 // Define global type for Cashfree in window object
 declare global {
   interface Window {
     Cashfree?: any;
+    cashfree?: any;
   }
 }
 
@@ -33,77 +35,52 @@ const CashfreeCheckout: React.FC<CashfreeCheckoutProps> = ({
   paymentSessionId,
   appScheme = "wealthhorizon"
 }) => {
-  const [cashfree, setCashfree] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isSdkReady, setIsSdkReady] = useState<boolean>(false);
   const { toast } = useToast();
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
   const isNativeApp = Capacitor.isNativePlatform();
+  const sdkLoadAttempted = useRef<boolean>(false);
+  const cashfreeInstanceRef = useRef<any>(null);
 
-  // Load Cashfree SDK from CDN
+  // Load Cashfree SDK using the new utility
   useEffect(() => {
-    const loadCashfreeSDK = () => {
-      // Check if SDK is already loaded
-      if (window.Cashfree) {
-        console.log("Cashfree SDK already loaded");
-        setCashfree(window.Cashfree);
-        return;
-      }
-
-      setIsLoading(true);
-      
-      // Create script tag
-      const script = document.createElement('script');
-      script.src = 'https://sdk.cashfree.com/js/ui/2.0.0/cashfree.prod.js';
-      script.async = true;
-      
-      script.onload = () => {
-        console.log("Cashfree SDK loaded from CDN");
-        if (window.Cashfree) {
-          setCashfree(window.Cashfree);
-          
-          // Auto-initiate payment on mobile if we have a payment session ID
-          if (isMobile && paymentSessionId) {
-            setTimeout(() => {
-              handleCashfreePayment(window.Cashfree);
-            }, 500);
-          }
-        } else {
-          console.error("Failed to load Cashfree SDK from CDN");
-          toast({
-            variant: "destructive",
-            title: "SDK Error",
-            description: "Failed to initialize payment gateway"
-          });
+    // Only attempt to load once
+    if (sdkLoadAttempted.current) return;
+    sdkLoadAttempted.current = true;
+    
+    const initSDK = async () => {
+      try {
+        setIsLoading(true);
+        const instance = await ensureCashfreeSDK();
+        cashfreeInstanceRef.current = instance;
+        setIsSdkReady(true);
+        
+        // Auto-initiate payment on mobile if we have a payment session ID
+        if (isMobile && paymentSessionId) {
+          setTimeout(() => {
+            handleCashfreePayment();
+          }, 500);
         }
-        setIsLoading(false);
-      };
-      
-      script.onerror = (error) => {
-        console.error("Error loading Cashfree SDK from CDN:", error);
+      } catch (error) {
+        console.error("Failed to initialize Cashfree SDK:", error);
         toast({
           variant: "destructive",
           title: "SDK Error",
-          description: "Failed to load payment gateway"
+          description: "Failed to initialize payment gateway"
         });
+      } finally {
         setIsLoading(false);
-      };
-      
-      // Add script to document
-      document.body.appendChild(script);
-      
-      // Clean up on unmount
-      return () => {
-        if (script.parentNode) {
-          script.parentNode.removeChild(script);
-        }
-      };
+      }
     };
     
-    loadCashfreeSDK();
+    initSDK();
   }, [paymentSessionId]);
 
-  const handleCashfreePayment = async (cf = cashfree) => {
-    if (!cf) {
+  const handleCashfreePayment = async () => {
+    const cashfreeInstance = cashfreeInstanceRef.current || getCashfreeInstance();
+    
+    if (!cashfreeInstance) {
       toast({
         variant: "destructive",
         title: "SDK Error",
@@ -129,13 +106,13 @@ const CashfreeCheckout: React.FC<CashfreeCheckoutProps> = ({
     try {
       setIsLoading(true);
       
-      // Set the appropriate redirect target based on platform
-      const redirectTarget = isNativeApp ? "mobile" : "_self";
+      // Re-ensure SDK is ready before proceeding
+      const freshInstance = await ensureCashfreeSDK();
+      cashfreeInstanceRef.current = freshInstance;
       
       // Configure checkout options with UPI Intent for mobile
       const checkoutOptions = {
         paymentSessionId: paymentSessionId,
-        redirectTarget: redirectTarget,
         // Specify UPI as payment method for mobile devices
         ...(isMobile && { paymentMethod: "upi" }),
         components: {
@@ -159,8 +136,8 @@ const CashfreeCheckout: React.FC<CashfreeCheckoutProps> = ({
       
       console.log("Initiating Cashfree payment with options:", checkoutOptions);
       
-      // Trigger Cashfree checkout
-      await cf.checkout(checkoutOptions);
+      // Trigger Cashfree checkout using the v3 SDK
+      await freshInstance.checkout(checkoutOptions);
     } catch (error) {
       console.error("Checkout error:", error);
       if (onFailure) {
@@ -196,7 +173,7 @@ const CashfreeCheckout: React.FC<CashfreeCheckoutProps> = ({
     window.location.href = upiLink;
   };
 
-  const handlePayment = () => {
+  const handlePayment = async () => {
     // Prefer Cashfree SDK with payment session ID
     if (paymentSessionId) {
       handleCashfreePayment();
@@ -217,7 +194,7 @@ const CashfreeCheckout: React.FC<CashfreeCheckoutProps> = ({
   return (
     <Button
       onClick={handlePayment}
-      disabled={isLoading || (!cashfree && !upiLink)}
+      disabled={isLoading || (!cashfreeInstanceRef.current && !upiLink)}
       className={`${className} ${isLoading ? 'opacity-70' : ''}`}
     >
       {isLoading ? (

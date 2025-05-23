@@ -196,11 +196,24 @@
             
             // Create script tag
             const script = document.createElement('script');
-            script.src = 'https://sdk.cashfree.com/js/ui/2.0.0/cashfree.prod.js';
+            script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
             script.async = true;
             
             script.onload = () => {
                 addLog('Cashfree SDK loaded successfully', 'success');
+                if (window.Cashfree) {
+                    try {
+                        // Initialize Cashfree with production mode using constructor pattern
+                        window.cashfreeInstance = window.Cashfree({
+                            mode: "production"
+                        });
+                        addLog('Cashfree SDK initialized with production mode', 'success');
+                    } catch (error) {
+                        addLog('Error initializing Cashfree SDK: ' + error.message, 'error');
+                    }
+                } else {
+                    addLog('Failed to load Cashfree SDK', 'error');
+                }
             };
             
             script.onerror = (error) => {
@@ -240,12 +253,17 @@
             addLog(`Initiating payment for order: ${orderId}`);
             
             try {
+                // Create a new Cashfree instance with production mode using v3 SDK constructor pattern
+                const cashfree = window.Cashfree({
+                    mode: "production"
+                });
+                addLog('Created new Cashfree instance with production mode', 'info');
+                
                 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
                 
                 // Configure UPI Intent payment
                 const checkoutOptions = {
                     paymentSessionId: sessionId,
-                    redirectTarget: "_self",
                     paymentMethod: "upi",
                     components: {
                         upi: {
@@ -270,8 +288,8 @@
                 addLog('Checkout options configured', 'info');
                 console.log('Checkout options:', checkoutOptions);
                 
-                // Trigger Cashfree checkout
-                await window.Cashfree.checkout(checkoutOptions);
+                // Trigger Cashfree checkout using the v3 SDK
+                await cashfree.checkout(checkoutOptions);
                 addLog('Checkout initiated', 'info');
                 
             } catch (error) {

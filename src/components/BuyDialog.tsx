@@ -20,6 +20,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { supabase } from '@/lib/supabase'
 import { useNavigate } from 'react-router-dom'
 import CashfreeCheckout from './CashfreeCheckout'
+import CashfreeUpiIntent from './CashfreeUpiIntent'
+import { loadCashfreeSDK } from '@/utils/cashfreeLoader'
 
 // Define global type for Cashfree in window object
 declare global {
@@ -31,6 +33,7 @@ declare global {
     disableDirectUpi?: () => void;
     openUPI?: (url?: string) => boolean;
     testSupabase?: () => Promise<void>;
+    testCashfreeSDK?: () => boolean;
   }
 }
 
@@ -89,6 +92,26 @@ if (typeof window !== 'undefined') {
       alert(`Supabase connection error: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
+  
+  // Add a function to test Cashfree SDK initialization
+  window.testCashfreeSDK = () => {
+    if (window.Cashfree) {
+      try {
+        window.Cashfree.initialiseApp({ mode: "production" });
+        console.log("Cashfree SDK initialized successfully");
+        alert("Cashfree SDK is properly initialized");
+        return true;
+      } catch (error) {
+        console.error("Error initializing Cashfree SDK:", error);
+        alert(`Cashfree SDK initialization error: ${error instanceof Error ? error.message : String(error)}`);
+        return false;
+      }
+    } else {
+      console.error("Cashfree SDK not found");
+      alert("Cashfree SDK not found on window object");
+      return false;
+    }
+  };
 }
 
 const BuyDialog = () => {
@@ -102,6 +125,7 @@ const BuyDialog = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [forceUpiEnabled, setForceUpiEnabled] = useState(false)
   const [directUpiEnabled, setDirectUpiEnabled] = useState(false)
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
   const [paymentStatus, setPaymentStatus] = useState<{ 
     orderId?: string, 
     upiLink?: string,
@@ -115,33 +139,17 @@ const BuyDialog = () => {
 
   // Load Cashfree SDK on component mount
   useEffect(() => {
-    const loadCashfreeSDK = () => {
-      // Check if SDK already loaded
-      if (window.Cashfree) {
-        console.log("Cashfree SDK already loaded");
-        return;
+    const initSDK = async () => {
+      try {
+        console.log("Initializing Cashfree SDK");
+        await loadCashfreeSDK();
+        console.log("Cashfree SDK initialized successfully");
+      } catch (error) {
+        console.error("Failed to initialize Cashfree SDK:", error);
       }
-      
-      console.log("Loading Cashfree SDK from CDN");
-      
-      // Create script tag
-      const script = document.createElement('script');
-      script.src = 'https://sdk.cashfree.com/js/ui/2.0.0/cashfree.prod.js';
-      script.async = true;
-      
-      script.onload = () => {
-        console.log("Cashfree SDK loaded from CDN");
-      };
-      
-      script.onerror = (error) => {
-        console.error("Error loading Cashfree SDK from CDN:", error);
-      };
-      
-      // Add script to document
-      document.body.appendChild(script);
     };
     
-    loadCashfreeSDK();
+    initSDK();
   }, []);
 
   // Fetch user details from Clerk when component mounts or user changes
@@ -278,6 +286,37 @@ const BuyDialog = () => {
     navigate('/history')
   }
 
+  // Helper function to test the Cashfree SDK initialization
+  const testCashfreeSDK = () => {
+    if (window.Cashfree) {
+      try {
+        // Use the constructor pattern for v3 SDK
+        const cashfreeInstance = window.Cashfree({
+          mode: "production"
+        });
+        toast({
+          title: "SDK Test Success",
+          description: "Cashfree SDK is properly initialized"
+        });
+        return true;
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "SDK Test Failed",
+          description: `Error: ${error instanceof Error ? error.message : String(error)}`
+        });
+        return false;
+      }
+    } else {
+      toast({
+        variant: "destructive",
+        title: "SDK Test Failed",
+        description: "Cashfree SDK not found on window object"
+      });
+      return false;
+    }
+  };
+
   // Manual transaction recording as a fallback
   const manuallyRecordTransaction = async (orderId: string, userId: string, amountValue: number, metalType: string) => {
     try {
@@ -329,53 +368,99 @@ const BuyDialog = () => {
         return true;
       }
       
-      const { data, error } = await supabase
-        .from('transactions')
-        .insert([
-          {
+      // Create transaction object with only the fields we know exist in the database
+      const transactionRecord = {
+        order_id: transactionData.orderId,
+        user_id: transactionData.userId,
+        amount: transactionData.amount,
+        metal_type: transactionData.type,
+        status: 'pending', // Initial status is pending
+        payment_method: 'UPI',
+        created_at: new Date().toISOString()
+      };
+      
+      // Don't include payment_session_id unless we have a value for it
+      if (transactionData.upiLink) {
+        // Try to add payment_session_id only if needed
+        try {
+          const { data, error } = await supabase
+            .from('transactions')
+            .insert([{
+              ...transactionRecord,
+              payment_session_id: transactionData.upiLink
+            }])
+            .select();
+            
+          if (error) {
+            // If error includes missing column, continue without that field
+            if (error.message?.includes("column") && error.message?.includes("payment_session_id")) {
+              console.log('payment_session_id column does not exist, trying without it');
+              throw new Error('column_missing');
+            } else {
+              console.error('Failed to store transaction in Supabase:', error);
+              throw error;
+            }
+          } else {
+            console.log('Transaction stored in Supabase with payment_session_id:', data);
+            return true;
+          }
+        } catch (innerError) {
+          // Only retry without payment_session_id if that was the issue
+          if (innerError.message === 'column_missing') {
+            const { error: insertError } = await supabase
+              .from('transactions')
+              .insert([transactionRecord]);
+              
+            if (insertError) {
+              console.error('Fallback insert also failed:', insertError);
+              return false;
+            } else {
+              console.log('Fallback transaction insert succeeded (without payment_session_id)');
+              return true;
+            }
+          } else {
+            throw innerError;
+          }
+        }
+      } else {
+        // If no upiLink/payment_session_id, just insert the basic record
+        const { error: insertError } = await supabase
+          .from('transactions')
+          .insert([transactionRecord]);
+          
+        if (insertError) {
+          console.error('Insert failed:', insertError);
+          return false;
+        } else {
+          console.log('Transaction insert succeeded');
+          return true;
+        }
+      }
+    } catch (err) {
+      console.error('Error storing transaction in Supabase:', err);
+      
+      // Final fallback - try a minimal insert with only essential fields
+      try {
+        const { error: finalError } = await supabase
+          .from('transactions')
+          .insert([{
             order_id: transactionData.orderId,
             user_id: transactionData.userId,
             amount: transactionData.amount,
             metal_type: transactionData.type,
-            status: 'pending', // Initial status is pending
+            status: 'pending',
             payment_method: 'UPI',
-            payment_session_id: transactionData.upiLink,
             created_at: new Date().toISOString()
-          }
-        ])
-        .select();
-        
-      if (error) {
-        console.error('Failed to store transaction in Supabase:', error);
-        
-        // Try a direct insert without returning data as fallback
-        const { error: insertError } = await supabase
-          .from('transactions')
-          .insert([
-            {
-              order_id: transactionData.orderId,
-              user_id: transactionData.userId,
-              amount: transactionData.amount,
-              metal_type: transactionData.type,
-              status: 'pending',
-              payment_method: 'UPI',
-              created_at: new Date().toISOString()
-            }
-          ]);
+          }]);
           
-        if (insertError) {
-          console.error('Fallback insert also failed:', insertError);
-          return false;
-        } else {
-          console.log('Fallback transaction insert succeeded');
+        if (!finalError) {
+          console.log('Final fallback transaction insert succeeded');
           return true;
         }
-      } else {
-        console.log('Transaction stored in Supabase:', data);
-        return true;
+      } catch (_) {
+        // Ignore errors in the final fallback
       }
-    } catch (err) {
-      console.error('Error storing transaction in Supabase:', err);
+      
       return false;
     }
   };
@@ -648,16 +733,31 @@ const BuyDialog = () => {
               </div>
               
               <div className="space-y-2">
-                <CashfreeCheckout
-                  orderId={paymentStatus.orderId!}
-                  amount={parseFloat(amount)}
-                  upiLink={paymentStatus.upiLink}
-                  paymentSessionId={paymentStatus.paymentSessionId}
-                  onSuccess={handlePaymentSuccess}
-                  onFailure={handlePaymentFailure}
-                  buttonText="Pay Now"
-                  className="w-full bg-green-600 hover:bg-green-700"
-                />
+                {isMobile && paymentStatus.paymentSessionId ? (
+                  // On mobile devices, use UPI Intent for faster payment
+                  <CashfreeUpiIntent
+                    orderId={paymentStatus.orderId!}
+                    amount={parseFloat(amount)}
+                    paymentSessionId={paymentStatus.paymentSessionId}
+                    onSuccess={handlePaymentSuccess}
+                    onFailure={handlePaymentFailure}
+                    buttonText="Pay Now"
+                    autoInitiate={true}
+                    className="w-full bg-green-600 hover:bg-green-700"
+                  />
+                ) : (
+                  // On desktop or fallback, use the standard checkout
+                  <CashfreeCheckout
+                    orderId={paymentStatus.orderId!}
+                    amount={parseFloat(amount)}
+                    upiLink={paymentStatus.upiLink}
+                    paymentSessionId={paymentStatus.paymentSessionId}
+                    onSuccess={handlePaymentSuccess}
+                    onFailure={handlePaymentFailure}
+                    buttonText="Pay Now"
+                    className="w-full bg-green-600 hover:bg-green-700"
+                  />
+                )}
               </div>
             </div>
           ) : (

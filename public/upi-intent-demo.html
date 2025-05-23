@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UPI Payment</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .card {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        button {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        button.loading {
+            position: relative;
+            color: transparent;
+        }
+        button.loading::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            top: 50%;
+            left: 50%;
+            margin-top: -10px;
+            margin-left: -10px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .status {
+            margin-top: 15px;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .status.success {
+            color: green;
+        }
+        .status.error {
+            color: red;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 16px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>UPI Payment</h1>
+        
+        <input type="hidden" id="payment-session-id">
+        <input type="hidden" id="order-id">
+        
+        <button id="pay-button" disabled>Pay Now</button>
+        
+        <div id="status-container" class="status" style="display: none;"></div>
+    </div>
+
+    <script>
+        // Handle status updates
+        function updateStatus(status, message) {
+            const statusContainer = document.getElementById('status-container');
+            statusContainer.style.display = 'block';
+            statusContainer.className = `status ${status}`;
+            statusContainer.textContent = message;
+        }
+
+        // Parse URL query parameters
+        function getQueryParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                sessionId: params.get('sessionId'),
+                orderId: params.get('orderId')
+            };
+        }
+        
+        // Button loading state
+        function setButtonLoading(button, isLoading) {
+            if (isLoading) {
+                button.disabled = true;
+                button.classList.add('loading');
+                button.setAttribute('data-text', button.textContent);
+                button.textContent = '';
+            } else {
+                button.disabled = false;
+                button.classList.remove('loading');
+                button.textContent = button.getAttribute('data-text') || 'Pay Now';
+            }
+        }
+
+        // Load Cashfree SDK from CDN
+        function loadCashfreeSDK() {
+            return new Promise((resolve, reject) => {
+                // Create script tag
+                const script = document.createElement('script');
+                script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+                script.async = true;
+                
+                script.onload = () => {
+                    if (window.Cashfree) {
+                        try {
+                            // Initialize Cashfree with production mode
+                            window.cashfreeInstance = window.Cashfree({
+                                mode: "production"
+                            });
+                            resolve(window.cashfreeInstance);
+                        } catch (error) {
+                            reject(error);
+                        }
+                    } else {
+                        reject(new Error("Failed to load Cashfree SDK"));
+                    }
+                };
+                
+                script.onerror = (error) => {
+                    reject(error);
+                };
+                
+                // Add script to document
+                document.body.appendChild(script);
+            });
+        }
+
+        // Initialize Cashfree UPI Intent payment
+        async function initiateUpiIntentPayment() {
+            const payButton = document.getElementById('pay-button');
+            const sessionId = document.getElementById('payment-session-id').value;
+            const orderId = document.getElementById('order-id').value;
+            
+            if (!sessionId || !orderId) {
+                updateStatus('error', 'Missing payment information');
+                return;
+            }
+            
+            if (!window.cashfreeInstance) {
+                updateStatus('error', 'Payment gateway not initialized');
+                return;
+            }
+            
+            setButtonLoading(payButton, true);
+            
+            try {
+                // UPI Intent specific checkout configuration
+                const checkoutOptions = {
+                    paymentSessionId: sessionId,
+                    paymentMethod: "upi",
+                    components: {
+                        upi: {
+                            upiMode: "intent"
+                        }
+                    },
+                    onSuccess: (data) => {
+                        console.log('Payment Success:', data);
+                        updateStatus('success', 'Payment successful');
+                        setButtonLoading(payButton, false);
+                    },
+                    onFailure: (error) => {
+                        console.error('Payment Failure:', error);
+                        updateStatus('error', `Payment failed: ${error.message || 'Unknown error'}`);
+                        setButtonLoading(payButton, false);
+                    }
+                };
+                
+                // Trigger Cashfree checkout with UPI Intent
+                await window.cashfreeInstance.checkout(checkoutOptions);
+                
+            } catch (error) {
+                console.error('UPI Intent checkout error:', error);
+                updateStatus('error', `Error: ${error.message || 'Unknown error'}`);
+                setButtonLoading(payButton, false);
+            }
+        }
+
+        // Initialize everything when page loads
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Get pay button
+            const payButton = document.getElementById('pay-button');
+            
+            // Get URL parameters
+            const params = getQueryParams();
+            if (params.sessionId && params.orderId) {
+                document.getElementById('payment-session-id').value = params.sessionId;
+                document.getElementById('order-id').value = params.orderId;
+                
+                try {
+                    // Load SDK as quickly as possible
+                    await loadCashfreeSDK();
+                    
+                    // Enable button
+                    payButton.disabled = false;
+                    
+                    // Auto-trigger payment on mobile
+                    if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+                        initiateUpiIntentPayment();
+                    }
+                } catch (error) {
+                    console.error('Error loading SDK:', error);
+                    updateStatus('error', 'Could not initialize payment');
+                }
+            } else {
+                updateStatus('error', 'Missing payment information');
+            }
+            
+            // Add click handler for pay button
+            payButton.addEventListener('click', initiateUpiIntentPayment);
+        });
+    </script>
+</body>
+</html> 
