@@ -125,7 +125,7 @@ const FeatureIcons: React.FC = () => {
       subtitle: 'Save up to ₹3000',
       route: '/webview',
       params: { service: 'bus', url: 'https://www.redbus.in/?gad_source=1&gad_campaignid=22526717912&gclid=CjwKCAjw56DBBhAkEiwAaFsG-u-17s976Ek0KMArWLjtjKslqv2tfrVmTm7hSdHQPjC0Gwe1F8eosBoCtlYQAvD_BwE' },
-      image: 'https://i.imgur.com/FBiLAHl.png',
+      image: 'https://ibb.co/7NQzDmfC',
       size: 'normal'
     },
     {
