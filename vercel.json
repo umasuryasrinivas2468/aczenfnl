@@ -8,6 +8,10 @@
       "source": "/api/check-transactions",
       "destination": "/api/payment-status.js"
     },
+    {
+      "source": "/api/cashfree/pg/orders/:orderId/notify",
+      "destination": "/api/cashfree/pg/orders/[orderId]/notify.js"
+    },
     { 
       "source": "/(.*)", 
       "destination": "/index.html" 
